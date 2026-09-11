@@ -66,7 +66,7 @@ The system consists of three independent components:
 
 | Parameter | Value |
 |-----------|-------|
-| Clocking | **Internal RC oscillator (HSI 8 MHz)**, PLL 72 MHz (no external crystal) |
+| Clocking | **Internal RC oscillator (HSI 8 MHz)**, PLL 64 MHz (no external crystal, F1 max from HSI: 4 MHz × 16) |
 | UART for PC Communication | **UART3**: **PC10 (TX)**, **PC11 (RX)** |
 | UART Settings | 115200 baud, 8N1 |
 
@@ -155,7 +155,7 @@ The system consists of three independent components:
 | Framework | Arduino (stm32duino) |
 | Tools | PlatformIO (VS Code) |
 | Code Size | Maximum 64 KB Flash, 8 KB RAM |
-| Clocking | HSI 8 MHz, PLL 72 MHz (internal RC) |
+| Clocking | HSI 8 MHz, PLL 64 MHz (internal RC, F1 max from HSI) |
 
 ***
 
