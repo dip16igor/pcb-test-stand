@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""UART daemon: bridge between STM32 test-stand firmware and the web GUI.
+
+Spec section 4. Three jobs:
+  1. Find the board (COM auto-detect with PING -> PONG verification, §4.2).
+  2. Serve the GUI over HTTP (port 8080) and talk to it over WebSocket (§4.3).
+  3. Translate WebSocket JSON <-> UART text lines, plus poll STATUS (§3.5).
+
+Decisions (from spec clarifications):
+  - No firmware push (FW-6): the daemon polls STATUS at --poll-interval.
+  - No port found: wait and rescan every --rescan-interval seconds, don't exit.
+  - Manual --port overrides detection but is retried the same way if it drops.
+
+Run:  python daemon.py --auto-port --http-port 8080
+Test without hardware:  python daemon.py --port loop:// --http-port 8081
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import logging
+import queue
+import threading
+import time
+from pathlib import Path
+
+import serial
+import serial.tools.list_ports
+import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+
+HERE = Path(__file__).resolve().parent
+LOG_FILE = HERE / "daemon.log"
+
+BAUDRATE = 115200
+# USB UART chips we prefer during auto-detect (spec §4.2).
+USB_DESCRIPTIONS = ("USB", "FTDI", "CP210", "CH340", "CH341", "PL2303")
+USB_VID_PID = {(0x0403, None), (0x10C4, None), (0x1A86, None), (0x067B, None)}
+
+log = logging.getLogger("daemon")
+
+
+# --------------------------------------------------------------------------
+# UART side (blocking thread: pyserial has no asyncio support)
+# --------------------------------------------------------------------------
+
+def probe_port(device: str, baudrate: int = BAUDRATE, timeout: float = 0.5) -> bool:
+    """Open `device`, send PING, return True iff PONG arrives in time (§4.2)."""
+    try:
+        ser = serial.serial_for_url(device, baudrate, timeout=timeout)
+    except Exception as exc:
+        log.debug("probe %s: open failed: %s", device, exc)
+        return False
+    try:
+        ser.reset_input_buffer()
+        ser.write(b"PING\n")
+        ser.flush()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            line = ser.readline().decode("utf-8", "replace").strip()
+            if line == "PONG":
+                return True
+        return False
+    except Exception as exc:
+        log.debug("probe %s: io failed: %s", device, exc)
+        return False
+    finally:
+        ser.close()
+
+
+def detect_port(baudrate: int = BAUDRATE) -> str | None:
+    """Scan ports, USB-like first, return first that answers PONG (§4.2)."""
+    ports = list(serial.tools.list_ports.comports())
+
+    def usbish(p) -> bool:
+        desc = (p.description or "").upper()
+        if any(s in desc for s in USB_DESCRIPTIONS):
+            return True
+        return (p.vid, None) in USB_VID_PID or (p.vid, p.pid) in {
+            (v, p_) for v, p_ in USB_VID_PID if p_ is not None
+        } or p.vid in {v for v, _ in USB_VID_PID}
+
+    for port in sorted(ports, key=lambda p: (not usbish(p), p.device)):
+        log.info("probing %s (%s)...", port.device, port.description)
+        if probe_port(port.device, baudrate):
+            log.info("auto-detected and verified port: %s", port.device)
+            return port.device
+    return None
+
+
+class UartThread(threading.Thread):
+    """Owns the serial port. Async side talks via `tx`/`rx` queues."""
+
+    def __init__(self, manual_port: str | None, baudrate: int, rescan_interval: float):
+        super().__init__(daemon=True, name="uart")
+        self.manual_port = manual_port
+        self.baudrate = baudrate
+        self.rescan_interval = rescan_interval
+        self.tx: queue.Queue[str] = queue.Queue()
+        self.rx: queue.Queue[str] = queue.Queue()
+        self.connected = threading.Event()
+        self.port_name: str | None = None
+        self._stop = threading.Event()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _connect(self) -> serial.Serial | None:
+        if self.manual_port:
+            try:
+                ser = serial.serial_for_url(
+                    self.manual_port, self.baudrate, timeout=0.05
+                )
+            except Exception as exc:
+                log.warning("port %s: open failed: %s", self.manual_port, exc)
+                return None
+            if probe_port(self.manual_port, self.baudrate):
+                log.info("port %s verified (PONG)", self.manual_port)
+            else:
+                log.warning("port %s: no PONG, continuing anyway (manual override)",
+                            self.manual_port)
+            return ser
+        device = detect_port(self.baudrate)
+        if device is None:
+            return None
+        try:
+            return serial.serial_for_url(device, self.baudrate, timeout=0.05)
+        except Exception as exc:
+            log.warning("port %s: open failed: %s", device, exc)
+            return None
+
+    def run(self) -> None:
+        while not self._stop.is_set():
+            ser = self._connect()
+            if ser is None:
+                log.info("no board, rescanning in %.0fs...", self.rescan_interval)
+                self._stop.wait(self.rescan_interval)
+                continue
+            self.port_name = ser.port
+            # Drain stale lines so first STATUS is fresh.
+            try:
+                ser.reset_input_buffer()
+            except Exception:
+                pass
+            self.connected.set()
+            log.info("UART connected: %s", self.port_name)
+            try:
+                while not self._stop.is_set():
+                    try:
+                        while True:
+                            ser.write(self.tx.get_nowait().encode("utf-8"))
+                    except queue.Empty:
+                        pass
+                    try:
+                        ser.flush()
+                    except Exception:
+                        pass
+                    try:
+                        raw = ser.readline()
+                    except Exception as exc:
+                        log.warning("UART read failed: %s", exc)
+                        break
+                    if raw:
+                        self.rx.put(raw.decode("utf-8", "replace"))
+            finally:
+                self.connected.clear()
+                try:
+                    ser.close()
+                except Exception:
+                    pass
+                log.warning("UART disconnected, rescanning...")
+
+
+# --------------------------------------------------------------------------
+# HTTP + WebSocket side
+# --------------------------------------------------------------------------
+
+class Hub:
+    """Connected browsers; single async bridge loop drives UART polling."""
+
+    def __init__(self, uart: UartThread, poll_interval: float):
+        self.uart = uart
+        self.poll_interval = poll_interval
+        self.clients: set[WebSocket] = set()
+        self.last_status: str = ""
+        self.refresh = asyncio.Event()  # immediate STATUS re-read (after SET)
+        self._was_connected = False
+
+    async def broadcast(self, msg: dict) -> None:
+        dead = []
+        for ws in self.clients:
+            try:
+                await ws.send_json(msg)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.clients.discard(ws)
+
+    def _classify(self, line: str) -> dict | None:
+        s = line.strip()
+        if not s:
+            return None
+        if s.startswith("STATUS"):
+            self.last_status = s[len("STATUS"):].strip()
+            return {"type": "STATUS", "payload": self.last_status}
+        return {"type": "RESP", "payload": s + "\n"}
+
+    async def loop(self) -> None:
+        next_poll = 0.0
+        while True:
+            connected = self.uart.connected.is_set()
+            if connected != self._was_connected:
+                self._was_connected = connected
+                await self.broadcast({
+                    "type": "STATE",
+                    "payload": "CONNECTED" if connected else "DISCONNECTED",
+                })
+            if connected:
+                # Drain everything the firmware (or loopback) sent.
+                try:
+                    while True:
+                        msg = self._classify(self.uart.rx.get_nowait())
+                        if msg is not None:
+                            await self.broadcast(msg)
+                except queue.Empty:
+                    pass
+                now = asyncio.get_event_loop().time()
+                if self.refresh.is_set() or now >= next_poll:
+                    self.refresh.clear()
+                    next_poll = now + self.poll_interval
+                    self.uart.tx.put("STATUS\n")
+            await asyncio.sleep(0.01)
+
+
+def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
+    app = FastAPI(title="pcb-test-stand daemon")
+
+    @app.get("/")
+    async def index():
+        if gui_dir is not None and (gui_dir / "index.html").exists():
+            return FileResponse(gui_dir / "index.html")
+        return PlainTextResponse(
+            "GUI not built yet (gui/index.html missing). "
+            "WebSocket API is live at /ws.\n",
+            status_code=503,
+        )
+
+    if gui_dir is not None and gui_dir.exists():
+        app.mount("/static", StaticFiles(directory=gui_dir), name="static")
+
+    @app.websocket("/ws")
+    async def ws_endpoint(ws: WebSocket):
+        await ws.accept()
+        hub.clients.add(ws)
+        try:
+            await ws.send_json({
+                "type": "STATE",
+                "payload": "CONNECTED" if hub.uart.connected.is_set()
+                           else "DISCONNECTED",
+            })
+            if hub.last_status:
+                await ws.send_json({"type": "STATUS", "payload": hub.last_status})
+            while True:
+                msg = await ws.receive_json()
+                if msg.get("type") != "CMD":
+                    continue
+                payload = str(msg.get("payload", ""))
+                if not payload.endswith("\n"):
+                    payload += "\n"
+                if not hub.uart.connected.is_set():
+                    await ws.send_json(
+                        {"type": "RESP", "payload": "ERR UART_DISCONNECTED\n"})
+                    continue
+                hub.uart.tx.put(payload)
+                # A SET changes outputs: re-read STATUS right away.
+                if payload.startswith("SET"):
+                    hub.refresh.set()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            hub.clients.discard(ws)
+
+    return app
+
+
+def parse_args(argv=None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="pcb-test-stand UART daemon")
+    p.add_argument("--port", default=None,
+                   help="manual COM port (e.g. COM3, /dev/ttyUSB0, loop://); "
+                        "overrides auto-detection")
+    p.add_argument("--auto-port", dest="auto_port", action="store_true",
+                   default=True)
+    p.add_argument("--no-auto-port", dest="auto_port", action="store_false")
+    p.add_argument("--http-port", type=int, default=8080)
+    p.add_argument("--baudrate", type=int, default=BAUDRATE)
+    p.add_argument("--poll-interval", type=float, default=0.1,
+                   help="STATUS poll period in seconds (default 0.1)")
+    p.add_argument("--rescan-interval", type=float, default=3.0,
+                   help="COM rescan period when no board found (default 3.0)")
+    p.add_argument("--gui-dir", default=str(HERE.parent / "gui"),
+                   help="directory served as GUI (default ../gui)")
+    return p.parse_args(argv)
+
+
+def main(argv=None) -> None:
+    args = parse_args(argv)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[logging.StreamHandler(),
+                  logging.FileHandler(LOG_FILE, encoding="utf-8")],
+    )
+    manual = args.port if args.port else None
+    if manual:
+        log.info("manual port: %s", manual)
+    elif not args.auto_port:
+        log.error("no --port given and --no-auto-port set; nothing to open")
+        raise SystemExit(2)
+
+    uart = UartThread(manual, args.baudrate, args.rescan_interval)
+    uart.start()
+    hub = Hub(uart, args.poll_interval)
+
+    gui_dir = Path(args.gui_dir)
+    if not (gui_dir / "index.html").exists():
+        log.warning("GUI missing at %s; / returns 503 until gui/ is built",
+                    gui_dir)
+        gui_for_app: Path | None = gui_dir if gui_dir.exists() else None
+    else:
+        gui_for_app = gui_dir
+    app = build_app(hub, gui_for_app)
+
+    async def lifespan_wrapper():
+        bridge = asyncio.ensure_future(hub.loop())
+        config = uvicorn.Config(app, host="127.0.0.1", port=args.http_port,
+                                log_level="warning")
+        server = uvicorn.Server(config)
+        try:
+            await server.serve()
+        finally:
+            bridge.cancel()
+            uart.stop()
+
+    log.info("serving HTTP on 127.0.0.1:%d", args.http_port)
+    asyncio.run(lifespan_wrapper())
+
+
+if __name__ == "__main__":
+    main()
