@@ -43,7 +43,11 @@ h1 { font-size: 20px; }
 }
 .control input { cursor: pointer; }
 
-/* Input indicators (spec §5.4). */
+/* Input indicators (spec §5.4). Lit states glow. */
+#fwver {
+  font-size: 14px;
+  color: #333;
+}
 .indicator {
   width: 20px;
   height: 20px;
@@ -53,6 +57,16 @@ h1 { font-size: 20px; }
   transform: translate(-50%, -50%);
   background-color: gray;
 }
-.indicator.on { background-color: green; }      /* 1 */
-.indicator.off { background-color: red; }       /* 0 */
+.indicator.on {  /* 1 */
+  background-color: #00e600;
+  border-color: #006600;
+  box-shadow: 0 0 8px 3px rgba(0, 255, 0, 0.9),
+              0 0 18px 6px rgba(0, 255, 0, 0.5);
+}
+.indicator.off {  /* 0 */
+  background-color: #ff2222;
+  border-color: #660000;
+  box-shadow: 0 0 8px 3px rgba(255, 30, 30, 0.9),
+              0 0 18px 6px rgba(255, 30, 30, 0.5);
+}
 .indicator.unknown { background-color: gray; }  /* no connection */

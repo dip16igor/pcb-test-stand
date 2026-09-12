@@ -48,6 +48,7 @@ function connect() {
     markAllUnknown();
     // Daemon pushes STATUS on its poll loop too; ask explicitly for sync.
     ws.send(JSON.stringify({type: 'CMD', payload: 'STATUS\n'}));
+    ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
   };
 
   ws.onmessage = (ev) => {
@@ -57,10 +58,15 @@ function connect() {
       parseStatus(msg.payload || '');
     } else if (msg.type === 'STATE') {
       setConnected(msg.payload === 'CONNECTED');
+      if (msg.payload === 'CONNECTED') {
+        document.getElementById('fwver').textContent = '';
+        ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
+      }
+    } else if (msg.type === 'RESP' && (msg.payload || '').startsWith('FW ')) {
+      document.getElementById('fwver').textContent = (msg.payload || '').trim();
     }
-    // RESP (OK/ERR echoes) intentionally ignored: next STATUS syncs UI.
+    // Other RESP (OK/ERR echoes) intentionally ignored: next STATUS syncs UI.
   };
-
   const schedule = () => {
     setConnected(false);
     if (!reconnectTimer) {
