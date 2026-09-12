@@ -105,6 +105,7 @@ class UartThread(threading.Thread):
         self.connected = threading.Event()
         self.port_name: str | None = None
         self._stop = threading.Event()
+        self.drop_requested = threading.Event()  # link supervisor: force rescan
 
     def stop(self) -> None:
         self._stop.set()
@@ -163,6 +164,11 @@ class UartThread(threading.Thread):
                 # removal on Windows) lands here and triggers a rescan.
                 # Only queue.Empty (no more to send) continues the loop.
                 while not self._stop.is_set():
+                    if self.drop_requested.is_set():
+                        self.drop_requested.clear()
+                        log.warning("link supervisor: dropping silent %s",
+                                    self.port_name)
+                        break
                     try:
                         while True:
                             ser.write(self.tx.get_nowait().encode("utf-8"))
@@ -191,10 +197,14 @@ class Hub:
     """Connected browsers; single async bridge loop drives UART polling."""
 
     def __init__(self, uart: UartThread, poll_interval: float,
-                 adc_interval: float = 1.0):
+                 adc_interval: float = 1.0, link_timeout: float = 2.0):
         self.uart = uart
         self.poll_interval = poll_interval
         self.adc_interval = adc_interval
+        # No reply this long (while polling!) means the board is gone even
+        # though the adapter still accepts bytes (e.g. STM32 powered off).
+        self.link_timeout = link_timeout
+        self.last_rx = 0.0
         self.clients: set[WebSocket] = set()
         self.last_status: str = ""
         self.last_adc: str = ""
@@ -228,8 +238,10 @@ class Hub:
         next_adc = 0.0
         while True:
             connected = self.uart.connected.is_set()
+            now = asyncio.get_event_loop().time()
             if connected != self._was_connected:
                 self._was_connected = connected
+                self.last_rx = now if connected else 0.0
                 await self.broadcast({
                     "type": "STATE",
                     "payload": "CONNECTED" if connected else "DISCONNECTED",
@@ -239,10 +251,17 @@ class Hub:
                 try:
                     while True:
                         msg = self._classify(self.uart.rx.get_nowait())
+                        self.last_rx = now
                         if msg is not None:
                             await self.broadcast(msg)
                 except queue.Empty:
                     pass
+                if (self.last_rx
+                        and now - self.last_rx > self.link_timeout):
+                    log.warning("link silent %.1fs, dropping %s",
+                                now - self.last_rx, self.uart.port_name)
+                    self.last_rx = 0.0
+                    self.uart.drop_requested.set()
                 now = asyncio.get_event_loop().time()
                 if self.refresh.is_set() or now >= next_poll:
                     self.refresh.clear()
@@ -399,6 +418,8 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help="STATUS poll period in seconds (default 0.1)")
     p.add_argument("--adc-interval", type=float, default=1.0,
                    help="ADC poll period in seconds (default 1.0)")
+    p.add_argument("--link-timeout", type=float, default=2.0,
+                   help="drop link after this many silent seconds (default 2.0)")
     p.add_argument("--rescan-interval", type=float, default=3.0,
                    help="COM rescan period when no board found (default 3.0)")
     p.add_argument("--gui-dir", default=str(HERE.parent / "gui"),
@@ -423,7 +444,7 @@ def main(argv=None) -> None:
 
     uart = UartThread(manual, args.baudrate, args.rescan_interval)
     uart.start()
-    hub = Hub(uart, args.poll_interval, args.adc_interval)
+    hub = Hub(uart, args.poll_interval, args.adc_interval, args.link_timeout)
 
     gui_dir = Path(args.gui_dir)
     if not (gui_dir / "index.html").exists():

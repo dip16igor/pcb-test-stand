@@ -39,6 +39,7 @@ python daemon.py --port loop:// --http-port 8081
 | `--baudrate` | 115200 | UART baud (8N1, fixed per spec) |
 | `--poll-interval` | 0.1 | STATUS poll period, seconds |
 | `--adc-interval` | 1.0 | ADC poll period, seconds (broadcast as `ADC` message) |
+| `--link-timeout` | 2.0 | drop link after this many silent seconds (board off, adapter alive) |
 | `--rescan-interval` | 3.0 | COM rescan when no board, seconds |
 | `--gui-dir` | `../gui` | directory served as GUI |
 
