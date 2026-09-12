@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCB Test Stand</title>
+<!-- Served by the daemon: page at /, assets at /static/* (spec §4.3). -->
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<h1>PCB Test Stand <span id="status" class="unknown">Disconnected</span></h1>
+
+<div class="board">
+  <img src="static/scheme.png" class="underlay" alt="PCB functional diagram">
+
+  <!-- Output controls. Coordinates are % of the board box: replacing
+       scheme.png only requires moving these top/left pairs (see README). -->
+  <!-- Left: mains input chain -->
+  <label class="control" style="top: 6%; left: 9%;"><input type="checkbox" data-pin="PIN_PC4" data-dir="OUT">PWR1</label>
+  <label class="control" style="top: 8%; left: 26%;"><input type="checkbox" data-pin="PIN_PC5" data-dir="OUT">EN</label>
+  <!-- Left: 9-32V input chain -->
+  <label class="control" style="top: 82%; left: 9%;"><input type="checkbox" data-pin="PIN_PA4" data-dir="OUT">PWR2</label>
+  <label class="control" style="top: 92%; left: 26%;"><input type="checkbox" data-pin="PIN_PC15" data-dir="OUT">EN_24V2</label>
+  <!-- Chargers -->
+  <label class="control" style="top: 8%; left: 42%;"><input type="checkbox" data-pin="PIN_PA11" data-dir="OUT">CE1</label>
+  <label class="control" style="top: 68%; left: 42%;"><input type="checkbox" data-pin="PIN_PB3" data-dir="OUT">CE2</label>
+  <!-- Output switches / converters -->
+  <label class="control" style="top: 8%; left: 56%;"><input type="checkbox" data-pin="PIN_PC13" data-dir="OUT">POWER1</label>
+  <label class="control" style="top: 68%; left: 56%;"><input type="checkbox" data-pin="PIN_PC14" data-dir="OUT">POWER2</label>
+  <label class="control" style="top: 18%; left: 72%;"><input type="checkbox" data-pin="PIN_PA7" data-dir="OUT">EN_24V</label>
+  <label class="control" style="top: 42%; left: 72%;"><input type="checkbox" data-pin="PIN_PA6" data-dir="OUT">EN_12V</label>
+  <label class="control" style="top: 66%; left: 72%;"><input type="checkbox" data-pin="PIN_PA5" data-dir="OUT">EN_7V</label>
+  <!-- Board LEDs -->
+  <label class="control" style="top: 96%; left: 26%;"><input type="checkbox" data-pin="PIN_PD0" data-dir="OUT">LED0</label>
+  <label class="control" style="top: 96%; left: 32%;"><input type="checkbox" data-pin="PIN_PB8" data-dir="OUT">LED1</label>
+  <label class="control" style="top: 96%; left: 38%;"><input type="checkbox" data-pin="PIN_PB9" data-dir="OUT">LED2</label>
+  <div class="indicator unknown" style="top: 16%; left: 18%;" data-pin="PIN_PC2" data-dir="IN" title="PG"></div>
+  <div class="indicator unknown" style="top: 16%; left: 30%;" data-pin="PIN_PB0" data-dir="IN" title="ALERT"></div>
+  <div class="indicator unknown" style="top: 2%; left: 44%;" data-pin="PIN_PA15" data-dir="IN" title="STAT1_1"></div>
+  <div class="indicator unknown" style="top: 2%; left: 48%;" data-pin="PIN_PA12" data-dir="IN" title="STAT2_1"></div>
+  <div class="indicator unknown" style="top: 38%; left: 49%;" data-pin="PIN_PC8" data-dir="IN" title="COMP1"></div>
+  <div class="indicator unknown" style="top: 26%; left: 60%;" data-pin="PIN_PC12" data-dir="IN" title="PG2"></div>
+  <div class="indicator unknown" style="top: 26%; left: 82%;" data-pin="PIN_PA8" data-dir="IN" title="PG1"></div>
+  <div class="indicator unknown" style="top: 50%; left: 82%;" data-pin="PIN_PB1" data-dir="IN" title="PGOOD"></div>
+  <div class="indicator unknown" style="top: 74%; left: 82%;" data-pin="PIN_PB2" data-dir="IN" title="PGOOD2"></div>
+  <div class="indicator unknown" style="top: 62%; left: 44%;" data-pin="PIN_PD2" data-dir="IN" title="STAT1_2"></div>
+  <div class="indicator unknown" style="top: 62%; left: 48%;" data-pin="PIN_PC9" data-dir="IN" title="STAT2_2"></div>
+  <div class="indicator unknown" style="top: 88%; left: 49%;" data-pin="PIN_PB15" data-dir="IN" title="COMP2"></div>
+  <div class="indicator unknown" style="top: 85%; left: 19%;" data-pin="PIN_PC3" data-dir="IN" title="KEY"></div>
+</div>
+
+<script src="static/script.js"></script>
+</body>
+</html>
