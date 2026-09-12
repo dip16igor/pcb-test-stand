@@ -94,18 +94,17 @@ body.editing #editlink { display: none; }
   transform: translate(-50%, -50%);
   display: none;
   font-family: monospace;
-  font-size: 14px;
+  font-size: 20px;
   white-space: nowrap;
   background: #111;
   color: #7fff7f;
   border: 1px solid #7fff7f;
   border-radius: 4px;
-  padding: 2px 8px;
+  padding: 3px 10px;
 }
 .voltread.live { display: block; }
-.voltread .vname { color: #ccc; margin-right: 6px; }
-body.editing .voltread { display: block; cursor: move; }  /* arrange anytime */
-
+.voltread .vname { color: #ccc; font-size: 14px; margin-right: 8px; }
+.voltread .vval { font-weight: bold; }
 #editbar {
   margin-top: 10px;
   padding: 8px;
