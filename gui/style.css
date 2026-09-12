@@ -70,3 +70,15 @@ h1 { font-size: 20px; }
               0 0 18px 6px rgba(255, 30, 30, 0.5);
 }
 .indicator.unknown { background-color: gray; }  /* no connection */
+
+#editbar {
+  margin-top: 10px;
+  padding: 8px;
+  border: 2px dashed #c00;
+  background: #fff8f0;
+  font-size: 13px;
+}
+#editbar textarea { width: 100%; box-sizing: border-box; font-size: 11px; }
+body.editing .control input { pointer-events: none; }  /* drag, don't toggle */
+body.editing .control, body.editing .indicator { cursor: move; }
+.dragging { outline: 2px solid #00c; }

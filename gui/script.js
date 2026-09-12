@@ -87,3 +87,77 @@ document.querySelectorAll('input[data-dir="OUT"]').forEach(box => {
 });
 
 connect();
+
+// Edit mode (?edit): drag controls/indicators with the mouse, then copy
+// the layout HTML back into index.html. Positions persist in localStorage
+// while arranging. Normal view is untouched.
+(function editMode() {
+  if (!new URLSearchParams(location.search).has('edit')) return;
+  document.body.classList.add('editing');
+  const bar = document.getElementById('editbar');
+  const read = document.getElementById('editread');
+  const out = document.getElementById('editout');
+  bar.hidden = false;
+  const board = document.querySelector('.board');
+  const store = 'teststand-layout';
+  const saved = JSON.parse(localStorage.getItem(store) || '{}');
+
+  const items = [...document.querySelectorAll('.control, .indicator')];
+  const key = (el) => el.dataset.pin || (el.querySelector('input') || {}).dataset.pin;
+  // Apply in-progress arrangement.
+  items.forEach(el => {
+    const p = saved[key(el)];
+    if (p) { el.style.left = p[0]; el.style.top = p[1]; }
+  });
+
+  const pos = (el) => [el.style.left, el.style.top];
+  const save = () => {
+    const o = {};
+    items.forEach(el => { o[key(el)] = pos(el); });
+    localStorage.setItem(store, JSON.stringify(o));
+  };
+  const serialize = () => {
+    out.value = items.map(el => '  ' + el.outerHTML).join('\n');
+  };
+
+  let drag = null;
+  items.forEach(el => {
+    el.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      el.setPointerCapture(ev.pointerId);
+      drag = {el, x0: ev.clientX, y0: ev.clientY, moved: false};
+      el.classList.add('dragging');
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!drag || drag.el !== el) return;
+      if (Math.hypot(ev.clientX - drag.x0, ev.clientY - drag.y0) < 3) return;
+      drag.moved = true;
+      const r = board.getBoundingClientRect();
+      const left = (ev.clientX - r.left) / r.width * 100;
+      const top = (ev.clientY - r.top) / r.height * 100;
+      el.style.left = left.toFixed(1) + '%';
+      el.style.top = top.toFixed(1) + '%';
+      read.textContent = `${key(el)}  left ${el.style.left}  top ${el.style.top}`;
+    });
+    const drop = () => {
+      if (!drag || drag.el !== el) return;
+      el.classList.remove('dragging');
+      drag = null;
+      save();
+      serialize();
+    };
+    el.addEventListener('pointerup', drop);
+    el.addEventListener('pointercancel', drop);
+  });
+
+  document.getElementById('editcopy').addEventListener('click', async () => {
+    serialize();
+    try { await navigator.clipboard.writeText(out.value); read.textContent = 'copied'; }
+    catch { out.select(); read.textContent = 'clipboard blocked — copy manually'; }
+  });
+  document.getElementById('editreset').addEventListener('click', () => {
+    localStorage.removeItem(store);
+    location.reload();
+  });
+  serialize();
+})();
