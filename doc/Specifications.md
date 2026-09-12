@@ -122,7 +122,7 @@ The system consists of three independent components:
 
 ### 3.5. UART Communication Protocol
 
-**Command Format (ASCII, text, line terminated by `\n` or `\r\n`):**
+**Command Format (ASCII, text, line terminated by `\n`, `\r`, or `\r\n`):**
 ```
 <COMMAND> <ARG1> <ARG2> ... <ARGn> \n
 ```

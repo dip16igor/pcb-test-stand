@@ -193,9 +193,12 @@ void loop() {
   // FW-3/FW-4: line-oriented ASCII protocol, \n or \r\n terminated.
   // FW-5: inputs are digitalRead on demand (always fresh, no stale cache);
   // effective poll rate is bound only by UART command rate (>> 100 Hz capable).
+  // FW-3/FW-4: line-oriented ASCII protocol, \n, \r or \r\n terminated
+  // (CR-only senders like Bray's Terminal work too; empty halves of \r\n
+  // are ignored by handleLine).
   while (Serial3.available()) {
     char c = static_cast<char>(Serial3.read());
-    if (c == '\n') {
+    if (c == '\n' || c == '\r') {
       if (!lineOverflow) {
         lineBuf[lineLen] = '\0';
         // Strip trailing \r for \r\n senders.
