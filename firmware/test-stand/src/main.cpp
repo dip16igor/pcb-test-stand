@@ -179,6 +179,14 @@ void setup() {
   Serial3.setTx(PC_UART_TX);
   Serial3.setRx(PC_UART_RX);
   Serial3.begin(UART_BAUD);
+  // Boot banner: proves firmware runs and UART pins are correct.
+  // Shows on every power-on/reset without any command.
+  delay(100);  // let the USB-UART adapter enumerate
+  Serial3.print(F("FW v"));
+  Serial3.print(FW_VERSION);
+  Serial3.print(F(" "));
+  Serial3.print(FW_DATE);
+  Serial3.println(F(" READY"));
 }
 
 void loop() {
