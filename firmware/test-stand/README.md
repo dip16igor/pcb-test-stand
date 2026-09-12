@@ -56,9 +56,9 @@ PING              ->  PONG
 VERSION           ->  FW v1.1.0 2026-09-12
 ```
 
-Analog rails (v1.1.0, Vref 3.3 V, mean of 16 samples):
 `VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
-`5V5_IN` (PC0, 100k/100k). BluePill build omits `5V5_IN` (no PC0 on LQFP48).
+`5V5_IN` (PC0, 100k/100k). BluePill build synthesizes `5V5_IN` (no PC0):
+capacitor triangle 0→5.5→0 V over ~4 min for GUI/chart testing.
 Verify against a meter on first run — divider tolerances shift readings.
 
 Unknown commands return `ERR UNKNOWN_COMMAND`. Inputs are read live on

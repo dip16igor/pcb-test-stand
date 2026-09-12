@@ -95,6 +95,18 @@ static float readAdcVolts(const AdcChannel &ch) {
   return (float)sum / ADC_SAMPLES / ADC_FULL * ADC_VREF * ch.ratio;
 }
 
+#ifdef BLUEPILL_TEST
+// BluePill has no PC0: synthesize 5V5_IN as a capacitor charge/discharge
+// triangle 0 -> 5.5 V -> 0 over ~4 min, so GUI/chart paths get exercised.
+static float mockCapacitor() {
+  constexpr uint32_t PERIOD_MS = 4UL * 60UL * 1000UL;
+  constexpr float VMAX = 5.5f;
+  float phase = (millis() % PERIOD_MS) / (float)PERIOD_MS;
+  float frac = phase < 0.5f ? phase * 2.0f : (1.0f - phase) * 2.0f;
+  return frac * VMAX;
+}
+#endif
+
 static void sendAdc() {
   Serial3.print(F("ADC"));
   for (size_t i = 0; i < kNumAdc; i++) {
@@ -103,6 +115,10 @@ static void sendAdc() {
     Serial3.print(F(":"));
     Serial3.print(readAdcVolts(kAdc[i]), 2);
   }
+#ifdef BLUEPILL_TEST
+  Serial3.print(F(" 5V5_IN:"));
+  Serial3.print(mockCapacitor(), 2);
+#endif
   Serial3.print(F("\n"));
 }
 

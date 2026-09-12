@@ -147,7 +147,8 @@ The system consists of three independent components:
   - `<STATE>`: `ON` (1) or `OFF` (0).
 - `ADC` response format: `<NAME>:<VOLTS>` with 2 decimals. Channels (v1.1.0):
   `VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
-  `5V5_IN` (PC0, 100k/100k). BluePill test build omits `5V5_IN` (no PC0).
+  `5V5_IN` (PC0, 100k/100k). BluePill test build synthesizes `5V5_IN`
+  (no PC0): capacitor triangle 0→5.5→0 V over ~4 min.
 - Command timeout: not specified (loop-based operation).
 - Receive buffer: minimum 64 bytes.
 
