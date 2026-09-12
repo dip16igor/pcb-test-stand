@@ -12,28 +12,23 @@ function setConnected(on) {
   if (!on) markAllUnknown();
   if (!on) {
     // Stale volts are worse than none.
-    document.querySelectorAll('#volts .volt').forEach(el => {
-      el.textContent = el.id.slice(5) + ' —';
+    document.querySelectorAll('.voltread .vval').forEach(el => {
+      el.textContent = '—';
     });
   }
 }
 
-// "VSYS:12.34 24V_IN1:24.10 ..." -> voltmeter chips (created on demand,
-// so 3-channel BluePill and 4-channel PCB both render).
+// "VSYS:12.34 24V_IN1:24.10 ..." -> overlay readouts. Elements are static
+// (draggable in ?edit); channels that never arrive stay hidden, so the
+// 3-channel BluePill simply never shows 5V5_IN.
 function renderAdc(payload) {
-  const box = document.getElementById('volts');
   payload.split(' ').filter(x => x).forEach(pair => {
     const idx = pair.indexOf(':');
     if (idx < 0) return;
-    const name = pair.slice(0, idx), val = pair.slice(idx + 1);
-    let el = document.getElementById('volt-' + name);
-    if (!el) {
-      el = document.createElement('span');
-      el.id = 'volt-' + name;
-      el.className = 'volt';
-      box.appendChild(el);
-    }
-    el.textContent = `${name} ${val}V`;
+    const el = document.querySelector(`.voltread[data-volt="${pair.slice(0, idx)}"]`);
+    if (!el) return;
+    el.querySelector('.vval').textContent = pair.slice(idx + 1) + 'V';
+    el.classList.add('live');
   });
 }
 
@@ -129,7 +124,7 @@ connect();
   const store = 'teststand-layout';
   const saved = JSON.parse(localStorage.getItem(store) || '{}');
 
-  const items = [...document.querySelectorAll('.control, .indicator')];
+  const items = [...document.querySelectorAll('.control, .indicator, .voltread')];
   const key = (el) => el.dataset.pin || (el.querySelector('input') || {}).dataset.pin;
   // Apply in-progress arrangement.
   items.forEach(el => {

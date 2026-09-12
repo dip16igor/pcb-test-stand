@@ -9,7 +9,6 @@
 </head>
 <body>
 <h1>PCB Test Stand <span id="status" class="unknown">Disconnected</span> <span id="fwver"></span> <a id="editlink" href="?edit" target="_blank" rel="noopener">Edit layout</a></h1>
-<div id="volts" title="Analog rails"></div>
 
 <div class="board">
   <img src="static/scheme.png" class="underlay" alt="PCB functional diagram">
@@ -48,6 +47,14 @@
   <div class="indicator unknown" style="top: 59%; left: 42.7%;" data-pin="PIN_PC9" data-dir="IN" title="STAT2_2"><span>STAT2_2</span></div>
   <div class="indicator unknown" style="top: 87.4%; left: 49.9%;" data-pin="PIN_PB15" data-dir="IN" title="COMP2"><span>COMP2</span></div>
   <div class="indicator unknown" style="top: 95.9%; left: 21.2%;" data-pin="PIN_PC3" data-dir="IN" title="KEY"><span>KEY</span></div>
+
+  <!-- Analog readouts (v1.1.0). data-pin carries the layout key (PIN_ + name);
+       data-volt selects the ADC channel. Hidden until first ADC reading;
+       BluePill never sends 5V5_IN, so it stays hidden there. -->
+  <div class="voltread" style="top: 30%; left: 52%;" data-pin="PIN_VSYS" data-volt="VSYS" title="VSYS"><span class="vname">VSYS</span> <span class="vval">—</span></div>
+  <div class="voltread" style="top: 20%; left: 32%;" data-pin="PIN_24V_IN1" data-volt="24V_IN1" title="24V_IN1"><span class="vname">24V_IN1</span> <span class="vval">—</span></div>
+  <div class="voltread" style="top: 78%; left: 32%;" data-pin="PIN_24V_IN2" data-volt="24V_IN2" title="24V_IN2"><span class="vname">24V_IN2</span> <span class="vval">—</span></div>
+  <div class="voltread" style="top: 40%; left: 88%;" data-pin="PIN_5V5_IN" data-volt="5V5_IN" title="5V5_IN"><span class="vname">5V5_IN</span> <span class="vval">—</span></div>
 </div>
 
 <div id="editbar" hidden>

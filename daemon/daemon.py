@@ -246,7 +246,7 @@ class Hub:
             await asyncio.sleep(0.01)
 
 
-PIN_RE = re.compile(r'data-pin="(PIN_[A-Z0-9]+)"')
+PIN_RE = re.compile(r'data-pin="(PIN_[A-Z0-9_]+)"')
 COORD_RE = re.compile(r"(top:\s*)([\d.]+)(%\s*;\s*left:\s*)([\d.]+)(%)")
 PCT_RE = re.compile(r"^\d+(\.\d+)?%$")
 
