@@ -89,6 +89,7 @@ h1 { font-size: 20px; }
   font-weight: normal;
 }
 body.editing #editlink { display: none; }
+#ilock { font-size: 14px; font-weight: normal; white-space: nowrap; }
 .voltread {
   position: absolute;
   transform: translate(-50%, -50%);

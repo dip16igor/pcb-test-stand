@@ -32,6 +32,25 @@ function renderAdc(payload) {
   });
 }
 
+// Firmware replies that carry UI state (not STATUS/ADC): version string and
+// interlock mode. Returns true when consumed.
+function handleFwResp(payload) {
+  if (payload.startsWith('FW ')) {
+    document.getElementById('fwver').textContent = payload.trim();
+    return true;
+  }
+  const box = document.getElementById('interlock');
+  if (payload === 'OK INTERLOCK ON' || payload === 'INTERLOCK ON') {
+    box.checked = true;
+    return true;
+  }
+  if (payload === 'OK INTERLOCK OFF' || payload === 'INTERLOCK OFF') {
+    box.checked = false;
+    return true;
+  }
+  return false;
+}
+
 function markAllUnknown() {
   document.querySelectorAll('.indicator').forEach(el => {
     el.classList.remove('on', 'off');
@@ -155,6 +174,7 @@ function connect() {
     // Daemon pushes STATUS on its poll loop too; ask explicitly for sync.
     ws.send(JSON.stringify({type: 'CMD', payload: 'STATUS\n'}));
     ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
+    ws.send(JSON.stringify({type: 'CMD', payload: 'INTERLOCK\n'}));
   };
 
   ws.onmessage = (ev) => {
@@ -167,9 +187,10 @@ function connect() {
       if (msg.payload === 'CONNECTED') {
         document.getElementById('fwver').textContent = '';
         ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
+        ws.send(JSON.stringify({type: 'CMD', payload: 'INTERLOCK\n'}));
       }
-    } else if (msg.type === 'RESP' && (msg.payload || '').startsWith('FW ')) {
-      document.getElementById('fwver').textContent = (msg.payload || '').trim();
+    } else if (msg.type === 'RESP') {
+      handleFwResp(msg.payload || '');
     } else if (msg.type === 'ADC') {
       if (!msg.payload) return;
       renderAdc(msg.payload);
@@ -194,6 +215,12 @@ document.querySelectorAll('input[data-dir="OUT"]').forEach(box => {
     const cmd = `SET ${box.dataset.pin} ${box.checked ? 'ON' : 'OFF'}\n`;
     ws.send(JSON.stringify({type: 'CMD', payload: cmd}));
   });
+});
+
+// Interlock mode toggle -> INTERLOCK command (v1.2.0).
+document.getElementById('interlock').addEventListener('change', (ev) => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({type: 'CMD', payload: `INTERLOCK ${ev.target.checked ? 'ON' : 'OFF'}\n`}));
 });
 
 chartInit();

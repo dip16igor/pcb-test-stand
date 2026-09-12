@@ -52,9 +52,13 @@ SET PIN_PA4 ON    ->  OK PIN_PA4 ON | ERR INVALID_PIN | ERR PIN_IS_INPUT
 GET PIN_PA8       ->  PIN_PA8 OFF  | ERR INVALID_PIN
 STATUS            ->  STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...
 ADC               ->  ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48
+INTERLOCK OFF     ->  OK INTERLOCK OFF | query INTERLOCK -> INTERLOCK ON
 PING              ->  PONG
-VERSION           ->  FW v1.1.0 2026-09-12
+VERSION           ->  FW v1.2.0 2026-09-12
 ```
+Interlock (v1.2.0, FW-9, default ON): SETting POWER1/POWER2 or PWR1/PWR2 ON
+forces the partner LOW first; OFF needs nothing. GUI header checkbox
+toggles the mode; terminal users get the same protection automatically.
 
 `VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
 `5V5_IN` (PC0, 100k/100k). BluePill build synthesizes `5V5_IN` (no PC0):

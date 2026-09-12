@@ -119,6 +119,7 @@ The system consists of three independent components:
 | FW-6 | Automatic status transmission on input pin change | Optional |
 | FW-7 | Handle invalid commands (ignore, log to debug) | Optional |
 | FW-8 | Watchdog (IWDG) for hang protection | Optional |
+| FW-9 (v1.2.0) | Output interlock: POWER1/POWER2 and PWR1/PWR2 pairs never HIGH together (partner forced LOW first on SET ON); mode command, default ON | Mandatory |
 
 ### 3.5. UART Communication Protocol
 
@@ -135,8 +136,8 @@ The system consists of three independent components:
 | `GET <PIN>` | Query pin state (input or output) | `GET PIN_PA8` | `PIN_PA8 ON` or `PIN_PA8 OFF` or `ERR INVALID_PIN` |
 | `STATUS` | Dump state of **all** pins (inputs and outputs) | `STATUS` | `STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...` |
 | `ADC` (v1.1.0) | Read analog rails in volts (16-sample mean, Vref 3.3 V) | `ADC` | `ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48` |
+| `INTERLOCK [ON\|OFF]` (v1.2.0) | Query/set output interlock mode | `INTERLOCK OFF` | `OK INTERLOCK OFF`, query `INTERLOCK` → `INTERLOCK ON`, bad arg → `ERR INVALID_ARG` |
 | `PING` | Connection check | `PING` | `PONG` |
-| `VERSION` | Firmware version | `VERSION` | `FW v1.1.0 2026-09-12` |
 
 **Protocol Requirements:**
 - Command case: **uppercase** (case-sensitive).

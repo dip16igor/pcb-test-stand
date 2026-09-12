@@ -2,7 +2,7 @@
 
 // Fallback version/date if not passed via build_flags (see platformio.ini, spec §12.3).
 #ifndef FW_VERSION
-#define FW_VERSION "1.1.0"
+#define FW_VERSION "1.2.0"
 #endif
 #ifndef FW_DATE
 #define FW_DATE "2026-09-12"
@@ -146,6 +146,20 @@ static void sendStatus() {
   Serial3.print(F("\n"));
 }
 
+// Output interlock (v1.2.0, FW-9): these pairs must never drive HIGH
+// together. Enabled by default; toggled over UART, not persisted.
+static bool interlockEnabled = true;
+struct InterlockPair {
+  const char *a;
+  const char *b;
+};
+static const InterlockPair kInterlock[] = {
+  {"PIN_PC13", "PIN_PC14"},  // POWER1 / POWER2
+  {"PIN_PC4", "PIN_PA4"},    // PWR1 / PWR2
+};
+static constexpr size_t kNumInterlock =
+    sizeof(kInterlock) / sizeof(kInterlock[0]);
+
 // Mutates `line` in place with strtok; must be NUL-terminated, newline stripped.
 static void handleLine(char *line) {
   // Skip empty lines.
@@ -166,6 +180,20 @@ static void handleLine(char *line) {
     sendStatus();
   } else if (strcmp(cmd, "ADC") == 0) {
     sendAdc();
+  } else if (strcmp(cmd, "INTERLOCK") == 0) {
+    char *arg = strtok(nullptr, " \t");
+    if (arg == nullptr) {
+      Serial3.print(F("INTERLOCK "));
+      Serial3.print(interlockEnabled ? F("ON\n") : F("OFF\n"));
+    } else if (strcmp(arg, "ON") == 0) {
+      interlockEnabled = true;
+      Serial3.print(F("OK INTERLOCK ON\n"));
+    } else if (strcmp(arg, "OFF") == 0) {
+      interlockEnabled = false;
+      Serial3.print(F("OK INTERLOCK OFF\n"));
+    } else {
+      Serial3.print(F("ERR INVALID_ARG\n"));
+    }
   } else if (strcmp(cmd, "GET") == 0) {
     char *pinName = strtok(nullptr, " \t");
     if (pinName == nullptr) {
@@ -197,6 +225,19 @@ static void handleLine(char *line) {
       return;
     }
     if (strcmp(state, "ON") == 0) {
+      // Interlock (v1.2.0): partner goes LOW first, then this pin HIGH.
+      // OFF needs nothing. Missing partner (BluePill subset) is skipped.
+      if (interlockEnabled) {
+        for (size_t i = 0; i < kNumInterlock; i++) {
+          const char *partner = nullptr;
+          if (strcmp(pinName, kInterlock[i].a) == 0) partner = kInterlock[i].b;
+          else if (strcmp(pinName, kInterlock[i].b) == 0) partner = kInterlock[i].a;
+          if (partner != nullptr) {
+            const PinEntry *q = findPin(partner);
+            if (q != nullptr) digitalWrite(q->arduinoPin, LOW);
+          }
+        }
+      }
       digitalWrite(p->arduinoPin, HIGH);
       Serial3.print(F("OK "));
       Serial3.print(p->name);
