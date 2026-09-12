@@ -43,6 +43,10 @@ python daemon.py --port loop:// --http-port 8081
 | `--rescan-interval` | 3.0 | COM rescan when no board, seconds |
 | `--gui-dir` | `../gui` | directory served as GUI |
 
+Fast ADC (e.g. `--adc-interval 0.02 --poll-interval 0.5` for ~50 Hz volts):
+the 115200 baud wire caps a full 27-pin STATUS at ~40 ms, so keep STATUS
+slow when ADC runs fast. Above ~75 Hz the daemon loop itself is the limit.
+
 ## Auto-detection (§4.2)
 
 1. List ports via `pyserial.tools.list_ports`.
