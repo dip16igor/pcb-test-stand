@@ -197,7 +197,7 @@ class Hub:
     """Connected browsers; single async bridge loop drives UART polling."""
 
     def __init__(self, uart: UartThread, poll_interval: float,
-                 adc_interval: float = 1.0, link_timeout: float = 2.0):
+                 adc_interval: float = 0.5, link_timeout: float = 2.0):
         self.uart = uart
         self.poll_interval = poll_interval
         self.adc_interval = adc_interval
@@ -416,8 +416,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--baudrate", type=int, default=BAUDRATE)
     p.add_argument("--poll-interval", type=float, default=0.1,
                    help="STATUS poll period in seconds (default 0.1)")
-    p.add_argument("--adc-interval", type=float, default=1.0,
-                   help="ADC poll period in seconds (default 1.0)")
+    p.add_argument("--adc-interval", type=float, default=0.5,
+                   help="ADC poll period in seconds (default 0.5)")
     p.add_argument("--link-timeout", type=float, default=2.0,
                    help="drop link after this many silent seconds (default 2.0)")
     p.add_argument("--rescan-interval", type=float, default=3.0,

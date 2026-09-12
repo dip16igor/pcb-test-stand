@@ -27,7 +27,14 @@ function renderAdc(payload) {
     if (idx < 0) return;
     const el = document.querySelector(`.voltread[data-volt="${pair.slice(0, idx)}"]`);
     if (!el) return;
-    el.querySelector('.vval').textContent = pair.slice(idx + 1) + 'V';
+    const val = el.querySelector('.vval');
+    const text = pair.slice(idx + 1) + 'V';
+    if (val.textContent !== text) {
+      val.textContent = text;
+      val.classList.remove('tick');
+      void val.offsetWidth;  // restart the flash animation
+      val.classList.add('tick');
+    }
     el.classList.add('live');
   });
 }
