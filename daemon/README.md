@@ -38,6 +38,7 @@ python daemon.py --port loop:// --http-port 8081
 | `--http-port` | 8080 | HTTP/WebSocket listen port |
 | `--baudrate` | 115200 | UART baud (8N1, fixed per spec) |
 | `--poll-interval` | 0.1 | STATUS poll period, seconds |
+| `--adc-interval` | 1.0 | ADC poll period, seconds (broadcast as `ADC` message) |
 | `--rescan-interval` | 3.0 | COM rescan when no board, seconds |
 | `--gui-dir` | `../gui` | directory served as GUI |
 

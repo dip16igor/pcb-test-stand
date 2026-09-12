@@ -182,11 +182,14 @@ class UartThread(threading.Thread):
 class Hub:
     """Connected browsers; single async bridge loop drives UART polling."""
 
-    def __init__(self, uart: UartThread, poll_interval: float):
+    def __init__(self, uart: UartThread, poll_interval: float,
+                 adc_interval: float = 1.0):
         self.uart = uart
         self.poll_interval = poll_interval
+        self.adc_interval = adc_interval
         self.clients: set[WebSocket] = set()
         self.last_status: str = ""
+        self.last_adc: str = ""
         self.refresh = asyncio.Event()  # immediate STATUS re-read (after SET)
         self._was_connected = False
 
@@ -207,10 +210,14 @@ class Hub:
         if s.startswith("STATUS"):
             self.last_status = s[len("STATUS"):].strip()
             return {"type": "STATUS", "payload": self.last_status}
+        if s == "ADC" or s.startswith("ADC "):
+            self.last_adc = s[len("ADC"):].strip()
+            return {"type": "ADC", "payload": self.last_adc}
         return {"type": "RESP", "payload": s + "\n"}
 
     async def loop(self) -> None:
         next_poll = 0.0
+        next_adc = 0.0
         while True:
             connected = self.uart.connected.is_set()
             if connected != self._was_connected:
@@ -233,6 +240,9 @@ class Hub:
                     self.refresh.clear()
                     next_poll = now + self.poll_interval
                     self.uart.tx.put("STATUS\n")
+                if now >= next_adc:
+                    next_adc = now + self.adc_interval
+                    self.uart.tx.put("ADC\n")
             await asyncio.sleep(0.01)
 
 
@@ -310,6 +320,8 @@ def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
             })
             if hub.last_status:
                 await ws.send_json({"type": "STATUS", "payload": hub.last_status})
+            if hub.last_adc:
+                await ws.send_json({"type": "ADC", "payload": hub.last_adc})
             while True:
                 msg = await ws.receive_json()
                 if msg.get("type") != "CMD":
@@ -365,6 +377,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     p.add_argument("--baudrate", type=int, default=BAUDRATE)
     p.add_argument("--poll-interval", type=float, default=0.1,
                    help="STATUS poll period in seconds (default 0.1)")
+    p.add_argument("--adc-interval", type=float, default=1.0,
+                   help="ADC poll period in seconds (default 1.0)")
     p.add_argument("--rescan-interval", type=float, default=3.0,
                    help="COM rescan period when no board found (default 3.0)")
     p.add_argument("--gui-dir", default=str(HERE.parent / "gui"),
@@ -389,7 +403,7 @@ def main(argv=None) -> None:
 
     uart = UartThread(manual, args.baudrate, args.rescan_interval)
     uart.start()
-    hub = Hub(uart, args.poll_interval)
+    hub = Hub(uart, args.poll_interval, args.adc_interval)
 
     gui_dir = Path(args.gui_dir)
     if not (gui_dir / "index.html").exists():

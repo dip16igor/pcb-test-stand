@@ -89,6 +89,17 @@ h1 { font-size: 20px; }
   font-weight: normal;
 }
 body.editing #editlink { display: none; }
+#volts { margin: 2px 0 6px 0; min-height: 24px; }
+.volt {
+  font-family: monospace;
+  font-size: 14px;
+  background: #111;
+  color: #7fff7f;
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-right: 6px;
+  white-space: nowrap;
+}
 
 #editbar {
   margin-top: 10px;

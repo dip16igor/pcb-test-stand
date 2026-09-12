@@ -281,6 +281,7 @@ def auto_detect_port():
 | GUI-7 | Show connection status (connected/disconnected) | Optional |
 | GUI-8 | Auto-reconnect on WebSocket disconnect | Optional |
 | GUI-9 | Responsive design for different screen resolutions (minimum 1280x720) | Optional |
+| GUI-10 (v1.1.0) | Display analog rail voltages from `ADC` (daemon extension message) | Mandatory |
 
 ### 5.2. GUI Element Types
 

@@ -10,6 +10,31 @@ function setConnected(on) {
   statusEl.textContent = on ? 'Connected' : 'Disconnected';
   statusEl.className = on ? 'connected' : 'disconnected';
   if (!on) markAllUnknown();
+  if (!on) {
+    // Stale volts are worse than none.
+    document.querySelectorAll('#volts .volt').forEach(el => {
+      el.textContent = el.id.slice(5) + ' —';
+    });
+  }
+}
+
+// "VSYS:12.34 24V_IN1:24.10 ..." -> voltmeter chips (created on demand,
+// so 3-channel BluePill and 4-channel PCB both render).
+function renderAdc(payload) {
+  const box = document.getElementById('volts');
+  payload.split(' ').filter(x => x).forEach(pair => {
+    const idx = pair.indexOf(':');
+    if (idx < 0) return;
+    const name = pair.slice(0, idx), val = pair.slice(idx + 1);
+    let el = document.getElementById('volt-' + name);
+    if (!el) {
+      el = document.createElement('span');
+      el.id = 'volt-' + name;
+      el.className = 'volt';
+      box.appendChild(el);
+    }
+    el.textContent = `${name} ${val}V`;
+  });
 }
 
 function markAllUnknown() {
@@ -64,6 +89,8 @@ function connect() {
       }
     } else if (msg.type === 'RESP' && (msg.payload || '').startsWith('FW ')) {
       document.getElementById('fwver').textContent = (msg.payload || '').trim();
+    } else if (msg.type === 'ADC') {
+      if (msg.payload) renderAdc(msg.payload);
     }
     // Other RESP (OK/ERR echoes) intentionally ignored: next STATUS syncs UI.
   };
