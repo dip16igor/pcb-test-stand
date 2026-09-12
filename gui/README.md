@@ -10,14 +10,14 @@ Browser GUI for the test stand (spec §5). Served by the daemon:
 - `script.js` — WebSocket client (spec §5.5).
 - `scheme.png` — underlay diagram (copy of `doc/Backgroгnd.png`).
 
-## Replacing the underlay
+## Placing elements
 
-1. Overwrite `scheme.png` (PNG, ≥1920px wide recommended).
-2. Move elements: every control/indicator carries inline
-   `style="top: Y%; left: X%"` — percentages of the board box,
-   so they track image scaling. Drag values until each sits on
-   its node; no other file changes needed.
-3. Hover an LED for its GUI name (`title` attribute).
+1. Open `http://localhost:8080/?edit` and drag elements into place.
+2. Press **Save to index.html** — the daemon writes the coordinates
+   straight into this file (no copy-paste; commit the result with git).
+   **Copy layout HTML** remains as a clipboard fallback.
+3. Overwrite `scheme.png` (PNG, ≥1920px wide recommended) and re-check.
+   Hover an LED for its GUI name (`title` attribute).
 
 ## Behavior
 

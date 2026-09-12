@@ -155,6 +155,26 @@ connect();
     try { await navigator.clipboard.writeText(out.value); read.textContent = 'copied'; }
     catch { out.select(); read.textContent = 'clipboard blocked — copy manually'; }
   });
+  document.getElementById('editsave').addEventListener('click', async () => {
+    const layout = {};
+    items.forEach(el => {
+      const p = pos(el);
+      layout[key(el)] = {left: p[0], top: p[1]};
+    });
+    read.textContent = 'saving...';
+    try {
+      const r = await fetch('/api/layout', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({layout}),
+      });
+      const d = await r.json();
+      read.textContent = r.ok ? `saved ${d.saved} to index.html`
+                              : `save failed: ${d.detail || r.status}`;
+    } catch (e) {
+      read.textContent = `save failed: ${e}`;
+    }
+  });
   document.getElementById('editreset').addEventListener('click', () => {
     localStorage.removeItem(store);
     location.reload();

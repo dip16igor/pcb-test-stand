@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import logging
 import queue
+import re
 import threading
 import time
 from pathlib import Path
@@ -28,8 +29,8 @@ from pathlib import Path
 import serial
 import serial.tools.list_ports
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 HERE = Path(__file__).resolve().parent
@@ -235,6 +236,52 @@ class Hub:
             await asyncio.sleep(0.01)
 
 
+PIN_RE = re.compile(r'data-pin="(PIN_[A-Z0-9]+)"')
+COORD_RE = re.compile(r"(top:\s*)([\d.]+)(%\s*;\s*left:\s*)([\d.]+)(%)")
+PCT_RE = re.compile(r"^\d+(\.\d+)?%$")
+
+
+def apply_layout(index_path: Path, layout: dict) -> tuple[int, list[str]]:
+    """Rewrite top/left % coords in index.html for the given pins.
+
+    Only touches `style="top: ..%; left: ..%"` on lines carrying a known
+    data-pin; everything else is byte-preserved. Returns (saved, skipped).
+    """
+    lines = index_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    saved = 0
+    skipped: list[str] = []
+    out = []
+    for line in lines:
+        m = PIN_RE.search(line)
+        if not m or m.group(1) not in layout:
+            out.append(line)
+            continue
+        entry = layout[m.group(1)]
+        try:
+            top, left = entry["top"], entry["left"]
+        except (TypeError, KeyError):
+            skipped.append(m.group(1))
+            out.append(line)
+            continue
+        if not (isinstance(top, str) and isinstance(left, str)
+                and PCT_RE.match(top) and PCT_RE.match(left)):
+            skipped.append(m.group(1))
+            out.append(line)
+            continue
+        new_line, n = COORD_RE.subn(
+            lambda c: c.group(1) + top[:-1] + c.group(3) + left[:-1] + c.group(5),
+            line, count=1)
+        if n == 0:
+            skipped.append(m.group(1))
+            out.append(line)
+            continue
+        out.append(new_line)
+        saved += 1
+    if saved:
+        index_path.write_text("".join(out), encoding="utf-8")
+    return saved, skipped
+
+
 def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
     app = FastAPI(title="pcb-test-stand daemon")
 
@@ -282,6 +329,26 @@ def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
             pass
         finally:
             hub.clients.discard(ws)
+
+    @app.post("/api/layout")
+    async def save_layout(req: Request):
+        """Edit-mode Save: persist element coordinates into gui/index.html."""
+        if gui_dir is None or not (gui_dir / "index.html").exists():
+            return JSONResponse({"detail": "no gui/index.html"}, status_code=404)
+        try:
+            body = await req.json()
+            layout = body.get("layout", {})
+        except Exception:
+            return JSONResponse({"detail": "invalid JSON"}, status_code=400)
+        if not isinstance(layout, dict) or not layout:
+            return JSONResponse({"detail": "empty layout"}, status_code=400)
+        try:
+            saved, skipped = apply_layout(gui_dir / "index.html", layout)
+        except Exception as exc:
+            log.warning("layout save failed: %s", exc)
+            return JSONResponse({"detail": "write failed"}, status_code=500)
+        log.info("layout saved: %d pins (%s)", saved, gui_dir / "index.html")
+        return {"saved": saved, "skipped": skipped}
 
     return app
 
