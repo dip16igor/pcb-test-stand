@@ -105,11 +105,6 @@ body.editing #editlink { display: none; }
 .voltread.live { display: block; }
 .voltread .vname { color: #ccc; font-size: 14px; margin-right: 8px; }
 .voltread .vval { font-weight: bold; }
-.voltread .vval.tick { animation: voltTick 0.5s ease-out; }
-@keyframes voltTick {
-  0% { background-color: #2a2; color: #000; }
-  100% { background-color: transparent; }
-}
 /* Floating trend chart. Size (px) editable via corner handle in ?edit. */
 .chart {
   position: absolute;
