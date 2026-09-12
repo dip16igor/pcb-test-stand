@@ -40,8 +40,12 @@ PC12 PG2, PD2 STAT1_2.
 
 ## Protocol (spec §3.5)
 
-Uppercase, `PIN_<PORT><NUMBER>`, lines end `\n` (tolerant to `\r\n`).
+Uppercase, `PIN_<PORT><NUMBER>`, lines end `\n`, `\r`, or `\r\n`.
 Oversize lines (>127 chars) are discarded to the next newline.
+
+> Bray's Terminal sends CR on Enter in some configs and nothing in others;
+> if Enter gets no answer, append `$0D` (CR) or `$0A` (LF) to the command
+> or use the Send button — both terminators are proven on hardware.
 
 ```
 SET PIN_PA4 ON    ->  OK PIN_PA4 ON | ERR INVALID_PIN | ERR PIN_IS_INPUT
