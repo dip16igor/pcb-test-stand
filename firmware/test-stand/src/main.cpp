@@ -2,10 +2,10 @@
 
 // Fallback version/date if not passed via build_flags (see platformio.ini, spec §12.3).
 #ifndef FW_VERSION
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 #endif
 #ifndef FW_DATE
-#define FW_DATE "2026-09-11"
+#define FW_DATE "2026-09-12"
 #endif
 
 // UART3 115200 8N1 (spec §2.3, §3.5).
@@ -68,6 +68,44 @@ static const PinEntry kPins[] = {
 };
 static constexpr size_t kNumPins = sizeof(kPins) / sizeof(kPins[0]);
 
+// Analog rails (v1.1.0): resistor dividers from the schematic, Vref 3.3 V.
+// 47k/4k7 -> ratio 11.0 (36 V full scale); 100k/100k -> ratio 2.0.
+// BluePill (LQFP48) has no PC0: 5V5_IN excluded from the test build.
+struct AdcChannel {
+  const char *name;
+  uint32_t arduinoPin;
+  float ratio;
+};
+static const AdcChannel kAdc[] = {
+  {"VSYS",    PA1, 11.0f},  // voltage divider 47k / 4k7
+  {"24V_IN1", PA2, 11.0f},  // voltage divider 47k / 4k7
+  {"24V_IN2", PA3, 11.0f},  // voltage divider 47k / 4k7
+#ifndef BLUEPILL_TEST
+  {"5V5_IN",  PC0,  2.0f},  // voltage divider 100k / 100k
+#endif
+};
+static constexpr size_t kNumAdc = sizeof(kAdc) / sizeof(kAdc[0]);
+static constexpr uint8_t ADC_SAMPLES = 16;  // mean over 16 conversions
+static constexpr float ADC_VREF = 3.3f;
+static constexpr float ADC_FULL = 4095.0f;  // 12-bit
+
+static float readAdcVolts(const AdcChannel &ch) {
+  uint32_t sum = 0;
+  for (uint8_t i = 0; i < ADC_SAMPLES; i++) sum += analogRead(ch.arduinoPin);
+  return (float)sum / ADC_SAMPLES / ADC_FULL * ADC_VREF * ch.ratio;
+}
+
+static void sendAdc() {
+  Serial3.print(F("ADC"));
+  for (size_t i = 0; i < kNumAdc; i++) {
+    Serial3.print(F(" "));
+    Serial3.print(kAdc[i].name);
+    Serial3.print(F(":"));
+    Serial3.print(readAdcVolts(kAdc[i]), 2);
+  }
+  Serial3.print(F("\n"));
+}
+
 static char lineBuf[LINE_BUF_SIZE];
 static size_t lineLen = 0;
 static bool lineOverflow = false;
@@ -110,6 +148,8 @@ static void handleLine(char *line) {
     Serial3.println(FW_DATE);
   } else if (strcmp(cmd, "STATUS") == 0) {
     sendStatus();
+  } else if (strcmp(cmd, "ADC") == 0) {
+    sendAdc();
   } else if (strcmp(cmd, "GET") == 0) {
     char *pinName = strtok(nullptr, " \t");
     if (pinName == nullptr) {

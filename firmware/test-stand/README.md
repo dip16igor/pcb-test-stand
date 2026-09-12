@@ -51,9 +51,15 @@ Oversize lines (>127 chars) are discarded to the next newline.
 SET PIN_PA4 ON    ->  OK PIN_PA4 ON | ERR INVALID_PIN | ERR PIN_IS_INPUT
 GET PIN_PA8       ->  PIN_PA8 OFF  | ERR INVALID_PIN
 STATUS            ->  STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...
+ADC               ->  ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48
 PING              ->  PONG
-VERSION           ->  FW v1.0.0 2026-09-11
+VERSION           ->  FW v1.1.0 2026-09-12
 ```
+
+Analog rails (v1.1.0, Vref 3.3 V, mean of 16 samples):
+`VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
+`5V5_IN` (PC0, 100k/100k). BluePill build omits `5V5_IN` (no PC0 on LQFP48).
+Verify against a meter on first run — divider tolerances shift readings.
 
 Unknown commands return `ERR UNKNOWN_COMMAND`. Inputs are read live on
 every `GET`/`STATUS` (no stale cache); the daemon polls at 10 Hz.

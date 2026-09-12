@@ -134,8 +134,9 @@ The system consists of three independent components:
 | `SET <PIN> ON\|OFF` | Set **output** pin state | `SET PIN_PA4 ON` | `OK PIN_PA4 ON` or `ERR INVALID_PIN` or `ERR PIN_IS_INPUT` |
 | `GET <PIN>` | Query pin state (input or output) | `GET PIN_PA8` | `PIN_PA8 ON` or `PIN_PA8 OFF` or `ERR INVALID_PIN` |
 | `STATUS` | Dump state of **all** pins (inputs and outputs) | `STATUS` | `STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...` |
+| `ADC` (v1.1.0) | Read analog rails in volts (16-sample mean, Vref 3.3 V) | `ADC` | `ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48` |
 | `PING` | Connection check | `PING` | `PONG` |
-| `VERSION` | Firmware version | `VERSION` | `FW v1.0.0 2026-09-11` |
+| `VERSION` | Firmware version | `VERSION` | `FW v1.1.0 2026-09-12` |
 
 **Protocol Requirements:**
 - Command case: **uppercase** (case-sensitive).
@@ -144,6 +145,9 @@ The system consists of three independent components:
 - `STATUS` response format: `<PIN>:<DIR>:<STATE>`, where:
   - `<DIR>`: `OUT` (output) or `IN` (input).
   - `<STATE>`: `ON` (1) or `OFF` (0).
+- `ADC` response format: `<NAME>:<VOLTS>` with 2 decimals. Channels (v1.1.0):
+  `VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
+  `5V5_IN` (PC0, 100k/100k). BluePill test build omits `5V5_IN` (no PC0).
 - Command timeout: not specified (loop-based operation).
 - Receive buffer: minimum 64 bytes.
 
