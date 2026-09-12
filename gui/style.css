@@ -105,6 +105,43 @@ body.editing #editlink { display: none; }
 .voltread.live { display: block; }
 .voltread .vname { color: #ccc; font-size: 14px; margin-right: 8px; }
 .voltread .vval { font-weight: bold; }
+/* Floating trend chart. Size (px) editable via corner handle in ?edit. */
+.chart {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 10, 10, 0.9);
+  border: 1px solid #7fff7f;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.chart .chead {
+  font-family: monospace;
+  font-size: 12px;
+  color: #7fff7f;
+  padding: 2px 6px;
+  height: 18px;
+  box-sizing: border-box;
+}
+.chart canvas {
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 100%;
+  height: calc(100% - 18px);
+  display: block;
+}
+.chart .rhandle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background: #7fff7f;
+  cursor: nwse-resize;
+  display: none;
+}
+body.editing .chart .rhandle { display: block; }
+body.editing .chart { cursor: move; }
 #editbar {
   margin-top: 10px;
   padding: 8px;

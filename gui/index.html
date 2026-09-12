@@ -23,7 +23,7 @@
   <label class="control" style="top: 70.1%; left: 25.5%;"><input type="checkbox" data-pin="PIN_PC15" data-dir="OUT">EN_24V2</label>
   <!-- Chargers -->
   <label class="control" style="top: 29.1%; left: 43%;"><input type="checkbox" data-pin="PIN_PA11" data-dir="OUT">CE1</label>
-  <label class="control" style="top: 74.2%; left: 43.1%;"><input type="checkbox" data-pin="PIN_PB3" data-dir="OUT">CE2</label>
+  <label class="control" style="top: 74.4%; left: 43.2%;"><input type="checkbox" data-pin="PIN_PB3" data-dir="OUT">CE2</label>
   <!-- Output switches / converters -->
   <label class="control" style="top: 18.4%; left: 22.1%;"><input type="checkbox" data-pin="PIN_PC13" data-dir="OUT">POWER1</label>
   <label class="control" style="top: 70.7%; left: 17%;"><input type="checkbox" data-pin="PIN_PC14" data-dir="OUT">POWER2</label>
@@ -36,16 +36,16 @@
   <label class="control" style="top: 96%; left: 38%;"><input type="checkbox" data-pin="PIN_PB9" data-dir="OUT">LED2</label>
   <div class="indicator unknown" style="top: 10.1%; left: 29.6%;" data-pin="PIN_PC2" data-dir="IN" title="PG"><span>PG</span></div>
   <div class="indicator unknown" style="top: 12.8%; left: 29.6%;" data-pin="PIN_PB0" data-dir="IN" title="ALERT"><span>ALERT</span></div>
-  <div class="indicator unknown" style="top: 11.1%; left: 42.3%;" data-pin="PIN_PA15" data-dir="IN" title="STAT1_1"><span>STAT1_1</span></div>
-  <div class="indicator unknown" style="top: 56.3%; left: 42.7%;" data-pin="PIN_PA12" data-dir="IN" title="STAT2_1"><span>STAT2_1</span></div>
+  <div class="indicator unknown" style="top: 11%; left: 46.1%;" data-pin="PIN_PA15" data-dir="IN" title="STAT1_1"><span>STAT1_1</span></div>
+  <div class="indicator unknown" style="top: 56%; left: 46.4%;" data-pin="PIN_PA12" data-dir="IN" title="STAT2_1"><span>STAT2_1</span></div>
   <div class="indicator unknown" style="top: 41.7%; left: 49.4%;" data-pin="PIN_PC8" data-dir="IN" title="COMP1"><span>COMP1</span></div>
-  <div class="indicator unknown" style="top: 62.6%; left: 42.7%;" data-pin="PIN_PC12" data-dir="IN" title="PG2"><span>PG2</span></div>
-  <div class="indicator unknown" style="top: 17.2%; left: 42.3%;" data-pin="PIN_PA8" data-dir="IN" title="PG1"><span>PG1</span></div>
+  <div class="indicator unknown" style="top: 58.9%; left: 42.7%;" data-pin="PIN_PC12" data-dir="IN" title="PG2"><span>PG2</span></div>
+  <div class="indicator unknown" style="top: 13.5%; left: 42.4%;" data-pin="PIN_PA8" data-dir="IN" title="PG1"><span>PG1</span></div>
   <div class="indicator unknown" style="top: 26%; left: 72.5%;" data-pin="PIN_PB1" data-dir="IN" title="PGOOD"><span>PGOOD</span></div>
   <div class="indicator unknown" style="top: 82.2%; left: 24.6%;" data-pin="PIN_PB2" data-dir="IN" title="PGOOD2"><span>PGOOD2</span></div>
-  <div class="indicator unknown" style="top: 13.7%; left: 42.3%;" data-pin="PIN_PD2" data-dir="IN" title="STAT1_2"><span>STAT1_2</span></div>
-  <div class="indicator unknown" style="top: 59%; left: 42.7%;" data-pin="PIN_PC9" data-dir="IN" title="STAT2_2"><span>STAT2_2</span></div>
-  <div class="indicator unknown" style="top: 87.4%; left: 49.9%;" data-pin="PIN_PB15" data-dir="IN" title="COMP2"><span>COMP2</span></div>
+  <div class="indicator unknown" style="top: 13.7%; left: 46.1%;" data-pin="PIN_PD2" data-dir="IN" title="STAT1_2"><span>STAT1_2</span></div>
+  <div class="indicator unknown" style="top: 58.9%; left: 46.4%;" data-pin="PIN_PC9" data-dir="IN" title="STAT2_2"><span>STAT2_2</span></div>
+  <div class="indicator unknown" style="top: 86.8%; left: 49.8%;" data-pin="PIN_PB15" data-dir="IN" title="COMP2"><span>COMP2</span></div>
   <div class="indicator unknown" style="top: 95.9%; left: 21.2%;" data-pin="PIN_PC3" data-dir="IN" title="KEY"><span>KEY</span></div>
 
   <!-- Analog readouts (v1.1.0). data-pin carries the layout key (PIN_ + name);
@@ -55,6 +55,10 @@
   <div class="voltread" style="top: 13.9%; left: 16.8%;" data-pin="PIN_24V_IN1" data-volt="24V_IN1" title="24V_IN1"><span class="vname">24V_IN1</span> <span class="vval">—</span></div>
   <div class="voltread" style="top: 75.1%; left: 21.3%;" data-pin="PIN_24V_IN2" data-volt="24V_IN2" title="24V_IN2"><span class="vname">24V_IN2</span> <span class="vval">—</span></div>
   <div class="voltread" style="top: 15.2%; left: 38.3%;" data-pin="PIN_5V5_IN" data-volt="5V5_IN" title="5V5_IN"><span class="vname">5V5_IN</span> <span class="vval">—</span></div>
+
+  <!-- VSYS trend chart (0..6 V, 5 min window). Draggable in ?edit; corner
+       handle resizes (width/height px persist via Save like coordinates). -->
+  <div class="chart" style="top: 14%; left: 66%; width: 340px; height: 190px;" data-pin="PIN_CHART_VSYS" data-chart="VSYS" title="VSYS trend"><div class="chead">VSYS · 0..6V · 5min</div><canvas></canvas><div class="rhandle"></div></div>
 </div>
 
 <div id="editbar" hidden>

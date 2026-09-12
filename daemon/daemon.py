@@ -248,13 +248,17 @@ class Hub:
 
 PIN_RE = re.compile(r'data-pin="(PIN_[A-Z0-9_]+)"')
 COORD_RE = re.compile(r"(top:\s*)([\d.]+)(%\s*;\s*left:\s*)([\d.]+)(%)")
+WIDTH_RE = re.compile(r"(width:\s*)([\d.]+)(px)")
+HEIGHT_RE = re.compile(r"(height:\s*)([\d.]+)(px)")
 PCT_RE = re.compile(r"^\d+(\.\d+)?%$")
+PX_RE = re.compile(r"^\d+(\.\d+)?px$")
 
 
 def apply_layout(index_path: Path, layout: dict) -> tuple[int, list[str]]:
-    """Rewrite top/left % coords in index.html for the given pins.
+    """Rewrite coords (and chart px sizes) in index.html for given pins.
 
-    Only touches `style="top: ..%; left: ..%"` on lines carrying a known
+    Only touches `style="top: ..%; left: ..%"` (plus `width`/`height` px on
+    lines that already carry them, e.g. charts) on lines with a known
     data-pin; everything else is byte-preserved. Returns (saved, skipped).
     """
     lines = index_path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -285,6 +289,14 @@ def apply_layout(index_path: Path, layout: dict) -> tuple[int, list[str]]:
             skipped.append(m.group(1))
             out.append(line)
             continue
+        # Chart dimensions: applied only where the line already has them.
+        for dim_re, dim_key in ((WIDTH_RE, "width"), (HEIGHT_RE, "height")):
+            dim_val = entry.get(dim_key) if isinstance(entry, dict) else None
+            if (isinstance(dim_val, str) and PX_RE.match(dim_val)
+                    and dim_re.search(new_line)):
+                new_line = dim_re.sub(
+                    lambda c: c.group(1) + dim_val[:-2] + c.group(3),
+                    new_line, count=1)
         out.append(new_line)
         saved += 1
     if saved:

@@ -282,6 +282,7 @@ def auto_detect_port():
 | GUI-8 | Auto-reconnect on WebSocket disconnect | Optional |
 | GUI-9 | Responsive design for different screen resolutions (minimum 1280x720) | Optional |
 | GUI-10 (v1.1.0) | Display analog rail voltages from `ADC` (daemon extension message) | Mandatory |
+| GUI-11 (v1.1.0) | Floating VSYS trend chart (0..6 V, 5 min, filled trace, grids+ticks), position and size editable | Optional |
 
 ### 5.2. GUI Element Types
 

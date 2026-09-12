@@ -59,6 +59,92 @@ function parseStatus(payload) {
   });
 }
 
+// VSYS trend chart: 0..6 V vertical, 5 min sliding window, 60% fill.
+// History accumulates locally from ADC frames (1 Hz); reconnect restarts it.
+const CHART_SPAN_MS = 5 * 60 * 1000;
+const CHART_VMAX = 6;
+const charts = {};
+function chartInit() {
+  document.querySelectorAll('.chart').forEach(el => {
+    const canvas = el.querySelector('canvas');
+    charts[el.dataset.chart] = {el, canvas, ctx: canvas.getContext('2d'), data: []};
+  });
+  chartDrawAll(Date.now());
+}
+function chartPush(name, v, now) {
+  const c = charts[name];
+  if (!c) return;
+  c.data.push({t: now, v});
+  const cut = now - CHART_SPAN_MS;
+  while (c.data.length && c.data[0].t < cut) c.data.shift();
+  chartDraw(c, now);
+}
+function chartDrawAll(now) {
+  Object.values(charts).forEach(c => chartDraw(c, now));
+}
+function chartDraw(c, now) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.max(50, c.canvas.clientWidth), H = Math.max(40, c.canvas.clientHeight);
+  if (!W || !H) return;
+  if (c.canvas.width !== Math.round(W * dpr) || c.canvas.height !== Math.round(H * dpr)) {
+    c.canvas.width = Math.round(W * dpr);
+    c.canvas.height = Math.round(H * dpr);
+  }
+  const g = c.ctx;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  // Plot area reserves room for tick labels.
+  const px0 = 30, px1 = W - 6, py0 = 6, py1 = H - 16;
+  const yOf = (v) => py1 - Math.min(v, CHART_VMAX) / CHART_VMAX * (py1 - py0);
+  const xOf = (t) => px0 + (1 - (now - t) / CHART_SPAN_MS) * (px1 - px0);
+  g.font = '10px monospace';
+  g.lineWidth = 1;
+  // Horizontal gridlines each 1 V.
+  for (let v = 0; v <= CHART_VMAX; v++) {
+    const y = yOf(v);
+    g.strokeStyle = v === 0 ? '#555' : '#333';
+    g.beginPath(); g.moveTo(px0, y); g.lineTo(px1, y); g.stroke();
+    g.fillStyle = '#ccc';
+    g.fillText(v + 'V', 4, y + 3);
+  }
+  // Vertical gridlines: minor each 30 s, labeled each 60 s as age.
+  for (let s = 0; s <= CHART_SPAN_MS / 1000; s += 30) {
+    const x = xOf(now - s * 1000);
+    if (x < px0) continue;
+    const major = s % 60 === 0;
+    g.strokeStyle = major ? '#444' : '#262626';
+    g.beginPath(); g.moveTo(x, py0); g.lineTo(x, py1); g.stroke();
+    if (major) {
+      g.fillStyle = '#ccc';
+      const label = s === 0 ? 'now' : '-' + Math.floor(s / 60) + 'm' + (s % 60 ? (s % 60) + 's' : '');
+      g.fillText(label, x - 8, H - 4);
+    }
+  }
+  if (c.data.length < 2) return;
+  // 60% fill down to 0 V, bright trace on top.
+  g.beginPath();
+  g.moveTo(Math.max(xOf(c.data[0].t), px0), yOf(c.data[0].v));
+  c.data.forEach(p => g.lineTo(Math.max(xOf(p.t), px0), yOf(p.v)));
+  const lx = Math.max(xOf(c.data[c.data.length - 1].t), px0);
+  const fx = Math.max(xOf(c.data[0].t), px0);
+  g.lineTo(lx, yOf(0)); g.lineTo(fx, yOf(0)); g.closePath();
+  g.fillStyle = 'rgba(0, 230, 0, 0.6)';
+  g.fill();
+  g.beginPath();
+  g.moveTo(Math.max(xOf(c.data[0].t), px0), yOf(c.data[0].v));
+  c.data.forEach(p => g.lineTo(Math.max(xOf(p.t), px0), yOf(p.v)));
+  g.strokeStyle = '#00ff00';
+  g.lineWidth = 2;
+  g.stroke();
+}
+function adcCharts(payload, now) {
+  payload.split(' ').filter(x => x).forEach(pair => {
+    const idx = pair.indexOf(':');
+    if (idx < 0) return;
+    const v = parseFloat(pair.slice(idx + 1));
+    if (!isNaN(v)) chartPush(pair.slice(0, idx), v, now);
+  });
+}
 function connect() {
   const url = `ws://${location.host}/ws`;
   ws = new WebSocket(url);
@@ -85,7 +171,9 @@ function connect() {
     } else if (msg.type === 'RESP' && (msg.payload || '').startsWith('FW ')) {
       document.getElementById('fwver').textContent = (msg.payload || '').trim();
     } else if (msg.type === 'ADC') {
-      if (msg.payload) renderAdc(msg.payload);
+      if (!msg.payload) return;
+      renderAdc(msg.payload);
+      adcCharts(msg.payload, Date.now());
     }
     // Other RESP (OK/ERR echoes) intentionally ignored: next STATUS syncs UI.
   };
@@ -108,7 +196,9 @@ document.querySelectorAll('input[data-dir="OUT"]').forEach(box => {
   });
 });
 
+chartInit();
 connect();
+window.addEventListener('resize', () => chartDrawAll(Date.now()));
 
 // Edit mode (?edit): drag controls/indicators with the mouse, then copy
 // the layout HTML back into index.html. Positions persist in localStorage
@@ -124,18 +214,29 @@ connect();
   const store = 'teststand-layout';
   const saved = JSON.parse(localStorage.getItem(store) || '{}');
 
-  const items = [...document.querySelectorAll('.control, .indicator, .voltread')];
+  const items = [...document.querySelectorAll('.control, .indicator, .voltread, .chart')];
   const key = (el) => el.dataset.pin || (el.querySelector('input') || {}).dataset.pin;
-  // Apply in-progress arrangement.
+  // Apply in-progress arrangement (arrays = pre-chart drafts).
   items.forEach(el => {
     const p = saved[key(el)];
-    if (p) { el.style.left = p[0]; el.style.top = p[1]; }
+    if (!p) return;
+    if (Array.isArray(p)) { el.style.left = p[0]; el.style.top = p[1]; return; }
+    if (p.left) el.style.left = p.left;
+    if (p.top) el.style.top = p.top;
+    if (p.width && el.classList.contains('chart')) el.style.width = p.width;
+    if (p.height && el.classList.contains('chart')) el.style.height = p.height;
   });
 
   const pos = (el) => [el.style.left, el.style.top];
+  const entry = (el) => {
+    const p = pos(el);
+    const e = {left: p[0], top: p[1]};
+    if (el.classList.contains('chart')) { e.width = el.style.width; e.height = el.style.height; }
+    return e;
+  };
   const save = () => {
     const o = {};
-    items.forEach(el => { o[key(el)] = pos(el); });
+    items.forEach(el => { o[key(el)] = entry(el); });
     localStorage.setItem(store, JSON.stringify(o));
   };
   const serialize = () => {
@@ -172,6 +273,31 @@ connect();
     el.addEventListener('pointercancel', drop);
   });
 
+  // Corner handles resize charts (px); coordinates still drag as usual.
+  document.querySelectorAll('.chart .rhandle').forEach(h => {
+    const box = h.closest('.chart');
+    h.addEventListener('pointerdown', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const sx = ev.clientX, sy = ev.clientY;
+      const w0 = box.offsetWidth, h0 = box.offsetHeight;
+      const mv = (e2) => {
+        box.style.width = Math.max(140, w0 + e2.clientX - sx) + 'px';
+        box.style.height = Math.max(100, h0 + e2.clientY - sy) + 'px';
+        chartDrawAll(Date.now());
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', mv);
+        window.removeEventListener('pointerup', up);
+        read.textContent = `${key(box)}  ${box.style.width} x ${box.style.height}`;
+        save();
+        serialize();
+      };
+      window.addEventListener('pointermove', mv);
+      window.addEventListener('pointerup', up);
+    });
+  });
+
   document.getElementById('editcopy').addEventListener('click', async () => {
     serialize();
     try { await navigator.clipboard.writeText(out.value); read.textContent = 'copied'; }
@@ -180,8 +306,7 @@ connect();
   document.getElementById('editsave').addEventListener('click', async () => {
     const layout = {};
     items.forEach(el => {
-      const p = pos(el);
-      layout[key(el)] = {left: p[0], top: p[1]};
+      layout[key(el)] = entry(el);
     });
     read.textContent = 'saving...';
     try {

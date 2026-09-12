@@ -63,7 +63,8 @@ python daemon.py --port loop:// --http-port 8081
     (extension for the GUI connection dot, §GUI-7).
 - `POST /api/layout` with `{"layout": {"PIN_PA4": {"left": "9%", "top": "6%"}, ...}}`
   rewrites coordinates in `gui/index.html` (edit-mode Save button).
-  Only `top`/`left` percentages on known `data-pin` lines change.
+  Only `top`/`left` percentages on known `data-pin` lines change;
+  chart lines additionally persist `width`/`height` px.
 
 Every `SET` triggers an immediate `STATUS` re-read on top of polling.
 
