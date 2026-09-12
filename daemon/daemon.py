@@ -133,6 +133,14 @@ class UartThread(threading.Thread):
             log.warning("port %s: open failed: %s", device, exc)
             return None
 
+    @staticmethod
+    def _drain(q: queue.Queue) -> None:
+        try:
+            while True:
+                q.get_nowait()
+        except queue.Empty:
+            pass
+
     def run(self) -> None:
         while not self._stop.is_set():
             ser = self._connect()
@@ -141,31 +149,31 @@ class UartThread(threading.Thread):
                 self._stop.wait(self.rescan_interval)
                 continue
             self.port_name = ser.port
-            # Drain stale lines so first STATUS is fresh.
+            # Fresh start: drop stale bytes and queued lines from the outage.
             try:
                 ser.reset_input_buffer()
             except Exception:
                 pass
+            self._drain(self.tx)
+            self._drain(self.rx)
             self.connected.set()
             log.info("UART connected: %s", self.port_name)
             try:
+                # ANY serial failure (read or write, e.g. surprise USB
+                # removal on Windows) lands here and triggers a rescan.
+                # Only queue.Empty (no more to send) continues the loop.
                 while not self._stop.is_set():
                     try:
                         while True:
                             ser.write(self.tx.get_nowait().encode("utf-8"))
                     except queue.Empty:
                         pass
-                    try:
-                        ser.flush()
-                    except Exception:
-                        pass
-                    try:
-                        raw = ser.readline()
-                    except Exception as exc:
-                        log.warning("UART read failed: %s", exc)
-                        break
+                    ser.flush()
+                    raw = ser.readline()
                     if raw:
                         self.rx.put(raw.decode("utf-8", "replace"))
+            except Exception as exc:
+                log.warning("UART I/O failed on %s: %s", self.port_name, exc)
             finally:
                 self.connected.clear()
                 try:
