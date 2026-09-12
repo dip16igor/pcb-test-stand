@@ -10,42 +10,71 @@ serves the GUI over HTTP.
 pip install -r requirements.txt
 ```
 
-## Run
+## Run methods
+
+Run from the `daemon/` directory. The log tells you what happened —
+look for `auto-detected and verified port: COMx`.
+
+**1. Normal: auto-detect the board (recommended)**
 
 ```bat
 python daemon.py --auto-port --http-port 8080
 ```
 
-Manual port (overrides auto-detection):
+Scans COM ports, sends `PING` to each USB-like one, uses the first that
+answers `PONG`. Then open `http://localhost:8080`.
+
+**2. Manual port (known adapter, or several plugged in)**
 
 ```bat
-python daemon.py --port COM3
+python daemon.py --port COM6
 python daemon.py --port /dev/ttyUSB0 --http-port 8080
 ```
 
-No hardware (loopback smoke test):
+Skips detection. A missing `PONG` only logs a warning — your explicit
+choice wins. Use this when auto-detect grabs the wrong adapter.
+
+**3. No hardware (loopback smoke test)**
 
 ```bat
 python daemon.py --port loop:// --http-port 8081
 ```
 
-## CLI
+UART echoes everything back: GUI connects, `STATUS`/`ADC` flow (empty),
+commands echo as `RESP`. Proves the whole HTTP+WS+serial chain.
 
-| Flag | Default | Meaning |
+**4. Fast volts (~50 Hz) for the chart**
+
+```bat
+python daemon.py --auto-port --adc-interval 0.02 --poll-interval 0.5
+```
+
+## Parameters
+
+| Flag | Default | Meaning, with example |
 |---|---|---|
-| `--port` | — | manual port, skips detection |
-| `--auto-port` / `--no-auto-port` | on | COM auto-detect with PING→PONG |
-| `--http-port` | 8080 | HTTP/WebSocket listen port |
-| `--baudrate` | 115200 | UART baud (8N1, fixed per spec) |
-| `--poll-interval` | 0.1 | STATUS poll period, seconds |
-| `--adc-interval` | 0.5 | ADC poll period, seconds (broadcast as `ADC` message) |
-| `--link-timeout` | 2.0 | drop link after this many silent seconds (board off, adapter alive) |
-| `--rescan-interval` | 3.0 | COM rescan when no board, seconds |
-| `--gui-dir` | `../gui` | directory served as GUI |
+| `--port` | — | manual port, skips detection. `--port COM6`, `--port /dev/ttyUSB0`, `--port loop://` |
+| `--auto-port` / `--no-auto-port` | on | COM auto-detect with PING→PONG. `--no-auto-port` without `--port` exits with an error (nothing to open) |
+| `--http-port` | 8080 | HTTP/WebSocket listen port on 127.0.0.1. `--http-port 8081` when 8080 is busy |
+| `--baudrate` | 115200 | UART baud, 8N1 fixed per spec. Change only if the firmware was rebuilt with another rate |
+| `--poll-interval` | 0.1 | STATUS poll period, seconds. GUI LEDs/outputs refresh at this rate. Raise to 0.5 when ADC runs fast (wire budget) |
+| `--adc-interval` | 0.5 | ADC poll period, seconds; broadcast as `ADC` message. `--adc-interval 0.02` ≈ 50 Hz volts; above ~75 Hz the daemon loop itself is the limit |
+| `--link-timeout` | 2.0 | drop link after this many silent seconds. Catches board power-off while the adapter stays plugged in; GUI goes gray, rescan follows |
+| `--rescan-interval` | 3.0 | COM rescan period when no board answers. Never exits — power the board late, it joins up |
+| `--gui-dir` | `../gui` | directory served as GUI. `--gui-dir ./alt-gui` to try another layout |
 
-Fast ADC (e.g. `--adc-interval 0.02 --poll-interval 0.5` for ~50 Hz volts):
-the 115200 baud wire caps a full 27-pin STATUS at ~40 ms, so keep STATUS
-slow when ADC runs fast. Above ~75 Hz the daemon loop itself is the limit.
+Wire budget at 115200 baud: a full 27-pin STATUS needs ~40 ms, an ADC
+frame ~5 ms. Defaults (≈50% wire) leave room for SET commands; pushing
+both intervals to the floor saturates the link and the GUI lags.
+
+## Troubleshooting
+
+- `no board, rescanning...` forever → adapter unplugged, wrong `--port`,
+  or another program (terminal!) holds the COM port. Close Bray first.
+- Port changed after replug (COM6 → COM7 on Windows) → auto-detect
+  follows it; the log names the new port. Manual `--port` does not.
+- GUI shows stale data but board is off → upgrade: `--link-timeout`
+  drops silent links (default 2 s).
 
 ## Auto-detection (§4.2)
 
