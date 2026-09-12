@@ -8,9 +8,18 @@
 #define FW_DATE "2026-09-11"
 #endif
 
-// UART3 on PC10 (TX) / PC11 (RX), 115200 8N1 (spec §2.3, §3.5).
-// NOTE: USART3 default pins are PB10/PB11; PC10/PC11 needs AFIO remap,
+// UART3 115200 8N1 (spec §2.3, §3.5).
+// Custom PCB: PC10 (TX) / PC11 (RX) — needs AFIO remap from default PB10/PB11,
 // done via setTx/setRx before begin().
+// BluePill test build (-D BLUEPILL_TEST, F103C8 LQFP48): PC10/PC11 don't exist,
+// use default PB10 (TX) / PB11 (RX).
+#ifdef BLUEPILL_TEST
+#define PC_UART_TX PB10
+#define PC_UART_RX PB11
+#else
+#define PC_UART_TX PC10
+#define PC_UART_RX PC11
+#endif
 static constexpr uint32_t UART_BAUD = 115200;
 static constexpr size_t LINE_BUF_SIZE = 128;  // spec: min 64 bytes
 
@@ -38,6 +47,8 @@ static const PinEntry kPins[] = {
   {"PIN_PB8",  PB8,  true},   // LED1
   {"PIN_PB9",  PB9,  true},   // LED2
   {"PIN_PB15", PB15, false},  // COMP2
+// BluePill (LQFP48) has no PC2-PC12: excluded from test build (ERR INVALID_PIN).
+#ifndef BLUEPILL_TEST
   {"PIN_PC2",  PC2,  false},  // PG
   {"PIN_PC3",  PC3,  false},  // KEY
   {"PIN_PC4",  PC4,  true},   // PWR1
@@ -45,11 +56,15 @@ static const PinEntry kPins[] = {
   {"PIN_PC8",  PC8,  false},  // COMP1
   {"PIN_PC9",  PC9,  false},  // STAT2_2
   {"PIN_PC12", PC12, false},  // PG2
+#endif
   {"PIN_PC13", PC13, true},   // POWER1
   {"PIN_PC14", PC14, true},   // POWER2
   {"PIN_PC15", PC15, true},   // EN_24V2
+// BluePill (LQFP48) has no PD0/PD2: excluded from test build.
+#ifndef BLUEPILL_TEST
   {"PIN_PD0",  PD0,  true},   // LED0
   {"PIN_PD2",  PD2,  false},  // STAT1_2
+#endif
 };
 static constexpr size_t kNumPins = sizeof(kPins) / sizeof(kPins[0]);
 
@@ -145,6 +160,11 @@ static void handleLine(char *line) {
 }
 
 void setup() {
+#ifdef BLUEPILL_TEST
+  // Free PA15/PB3/PB4 (JTAG) as GPIO; SWD on PA13/PA14 keeps working.
+  __HAL_RCC_AFIO_CLK_ENABLE();
+  __HAL_AFIO_REMAP_SWJ_NOJTAG();
+#endif
   // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up.
   for (size_t i = 0; i < kNumPins; i++) {
     if (kPins[i].isOutput) {
@@ -155,9 +175,9 @@ void setup() {
     }
   }
 
-  // FW-1: UART3 on PC10/PC11 (remapped from default PB10/PB11).
-  Serial3.setTx(PC10);
-  Serial3.setRx(PC11);
+  // FW-1: UART3 (custom PCB: PC10/PC11 remapped; BluePill test: PB10/PB11).
+  Serial3.setTx(PC_UART_TX);
+  Serial3.setRx(PC_UART_RX);
   Serial3.begin(UART_BAUD);
 }
 
