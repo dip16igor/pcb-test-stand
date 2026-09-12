@@ -83,6 +83,12 @@ h1 { font-size: 20px; }
   border-radius: 3px;
   padding: 0 4px;
 }
+#editlink {
+  float: right;
+  font-size: 14px;
+  font-weight: normal;
+}
+body.editing #editlink { display: none; }
 
 #editbar {
   margin-top: 10px;
