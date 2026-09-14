@@ -41,7 +41,7 @@ h1 { font-size: 20px; }
   padding: 1px 5px;
   cursor: pointer;
 }
-.control input { cursor: pointer; }
+.control input { cursor: pointer; width: 18px; height: 18px; accent-color: #060; vertical-align: -3px; }
 
 /* Input indicators (spec §5.4). Lit states glow. */
 #fwver {
