@@ -171,13 +171,17 @@ class UartThread(threading.Thread):
                         break
                     try:
                         while True:
-                            ser.write(self.tx.get_nowait().encode("utf-8"))
+                            line = self.tx.get_nowait()
+                            log.debug("TX: %s", line.strip())
+                            ser.write(line.encode("utf-8"))
                     except queue.Empty:
                         pass
                     ser.flush()
                     raw = ser.readline()
                     if raw:
-                        self.rx.put(raw.decode("utf-8", "replace"))
+                        text = raw.decode("utf-8", "replace")
+                        log.debug("RX: %s", text.strip())
+                        self.rx.put(text)
             except Exception as exc:
                 log.warning("UART I/O failed on %s: %s", self.port_name, exc)
             finally:
@@ -227,10 +231,16 @@ class Hub:
             return None
         if s.startswith("STATUS"):
             self.last_status = s[len("STATUS"):].strip()
+            log.debug("STATUS: %d pins", len(self.last_status.split()))
             return {"type": "STATUS", "payload": self.last_status}
         if s == "ADC" or s.startswith("ADC "):
             self.last_adc = s[len("ADC"):].strip()
+            log.debug("ADC: %s", self.last_adc)
             return {"type": "ADC", "payload": self.last_adc}
+        if s.startswith("ERR"):
+            log.warning("FW: %s", s)
+        else:
+            log.info("FW: %s", s)
         return {"type": "RESP", "payload": s + "\n"}
 
     async def loop(self) -> None:
@@ -369,9 +379,11 @@ def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
                 if not payload.endswith("\n"):
                     payload += "\n"
                 if not hub.uart.connected.is_set():
+                    log.warning("CMD dropped, UART disconnected: %s", payload.strip())
                     await ws.send_json(
                         {"type": "RESP", "payload": "ERR UART_DISCONNECTED\n"})
                     continue
+                log.info("WS CMD: %s", payload.strip())
                 hub.uart.tx.put(payload)
                 # A SET changes outputs: re-read STATUS right away.
                 if payload.startswith("SET"):
@@ -424,13 +436,15 @@ def parse_args(argv=None) -> argparse.Namespace:
                    help="COM rescan period when no board found (default 3.0)")
     p.add_argument("--gui-dir", default=str(HERE.parent / "gui"),
                    help="directory served as GUI (default ../gui)")
+    p.add_argument("--verbose", "-v", action="store_true",
+                   help="log every UART TX/RX line, including STATUS/ADC polls")
     return p.parse_args(argv)
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
         handlers=[logging.StreamHandler(),
                   logging.FileHandler(LOG_FILE, encoding="utf-8")],

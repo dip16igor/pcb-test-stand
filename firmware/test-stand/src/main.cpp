@@ -77,11 +77,11 @@ struct AdcChannel {
   float ratio;
 };
 static const AdcChannel kAdc[] = {
-  {"VSYS",    PA1, 11.0f},  // voltage divider 47k / 4k7
-  {"24V_IN1", PA2, 11.0f},  // voltage divider 47k / 4k7
+  {"VSYS",    PA1, 12.96f}, // calibrated 2026-09-22: 20.35 read at 23.97 meter
+  {"24V_IN1", PA2, 12.86f}, // calibrated 2026-09-22: 23.44 read at 23.97 meter
   {"24V_IN2", PA3, 11.0f},  // voltage divider 47k / 4k7
 #ifndef BLUEPILL_TEST
-  {"5V5_IN",  PC0,  2.0f},  // voltage divider 100k / 100k
+  {"5V5_IN",  PC0,  2.0f},   // voltage divider 100k/100k (re-trim after S/H fix)
 #endif
 };
 static constexpr size_t kNumAdc = sizeof(kAdc) / sizeof(kAdc[0]);
@@ -257,6 +257,10 @@ static void handleLine(char *line) {
 }
 
 void setup() {
+  // stm32duino defaults analogRead to 10-bit (AVR compat); the ADC math
+  // below assumes 12-bit (ADC_FULL 4095). Without this every rail reads
+  // ~1/4 of the true voltage.
+  analogReadResolution(12);
 #ifdef BLUEPILL_TEST
   // Free PA15/PB3/PB4 (JTAG) as GPIO; SWD on PA13/PA14 keeps working.
   __HAL_RCC_AFIO_CLK_ENABLE();

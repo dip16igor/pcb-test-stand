@@ -105,3 +105,20 @@ Every `SET` triggers an immediate `STATUS` re-read on top of polling.
 ## Log
 
 Console + `daemon.log` next to the script.
+
+## Debug UART traffic
+
+Every browser command and every firmware reply is logged
+(console + `daemon.log`), so a reverting checkbox is diagnosable
+without a terminal on the COM port:
+
+```
+WS CMD: SET PIN_PD0 ON
+FW: OK PIN_PD0 ON
+FW: ERR INVALID_PIN
+```
+
+`FW: ERR ...` lines are warnings. A rejected `SET` explains the GUI
+reverting on the next `STATUS` poll. `STATUS`/`ADC` poll frames are
+`DEBUG`-level: run with `--verbose` (`-v`) to see every `TX:`/`RX:`
+line on the wire.
