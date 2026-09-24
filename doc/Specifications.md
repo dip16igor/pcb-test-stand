@@ -135,7 +135,7 @@ The system consists of three independent components:
 | `SET <PIN> ON\|OFF` | Set **output** pin state | `SET PIN_PA4 ON` | `OK PIN_PA4 ON` or `ERR INVALID_PIN` or `ERR PIN_IS_INPUT` |
 | `GET <PIN>` | Query pin state (input or output) | `GET PIN_PA8` | `PIN_PA8 ON` or `PIN_PA8 OFF` or `ERR INVALID_PIN` |
 | `STATUS` | Dump state of **all** pins (inputs and outputs) | `STATUS` | `STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...` |
-| `ADC` (v1.1.0) | Read analog rails in volts (16-sample mean, Vref 3.3 V) | `ADC` | `ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48` |
+| `ADC` (v1.1.0, v1.2.1: VDDA from VREFINT) | Read analog rails in volts (16-sample mean, VREFINT-compensated) | `ADC` | `ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48 VCC:3.28` |
 | `INTERLOCK [ON\|OFF]` (v1.2.0) | Query/set output interlock mode | `INTERLOCK OFF` | `OK INTERLOCK OFF`, query `INTERLOCK` → `INTERLOCK ON`, bad arg → `ERR INVALID_ARG` |
 | `PING` | Connection check | `PING` | `PONG` |
 

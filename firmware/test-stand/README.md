@@ -51,7 +51,7 @@ Oversize lines (>127 chars) are discarded to the next newline.
 SET PIN_PA4 ON    ->  OK PIN_PA4 ON | ERR INVALID_PIN | ERR PIN_IS_INPUT
 GET PIN_PA8       ->  PIN_PA8 OFF  | ERR INVALID_PIN
 STATUS            ->  STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...
-ADC               ->  ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48
+ADC               ->  ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48 VCC:3.28
 INTERLOCK OFF     ->  OK INTERLOCK OFF | query INTERLOCK -> INTERLOCK ON
 PING              ->  PONG
 VERSION           ->  FW v1.2.0 2026-09-12
@@ -61,7 +61,11 @@ forces the partner LOW first; OFF needs nothing. GUI header checkbox
 toggles the mode; terminal users get the same protection automatically.
 
 `VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
-`5V5_IN` (PC0, 100k/100k). BluePill build synthesizes `5V5_IN` (no PC0):
+`5V5_IN` (PC0, 100k/100k). Every `ADC` frame starts by sampling the internal
+bandgap (`AVREF`, VREFINT 1.20 V typ): VDDA = 1.20 * 4095 / raw, and all rail
+voltages scale from that VDDA instead of a fixed 3.3 V (trailing `VCC:` field
+shows it). Residual absolute error is the VREFINT part spread (typ ±3%).
+BluePill build synthesizes `5V5_IN` (no PC0):
 capacitor triangle 0→5.5→0 V over ~4 min for GUI/chart testing.
 Verify against a meter on first run — divider tolerances shift readings.
 

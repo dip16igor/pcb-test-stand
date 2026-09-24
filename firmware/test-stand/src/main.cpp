@@ -86,13 +86,30 @@ static const AdcChannel kAdc[] = {
 };
 static constexpr size_t kNumAdc = sizeof(kAdc) / sizeof(kAdc[0]);
 static constexpr uint8_t ADC_SAMPLES = 16;  // mean over 16 conversions
-static constexpr float ADC_VREF = 3.3f;
+static constexpr float ADC_VREF_NOM = 3.3f; // fallback if VREFINT unreadable
 static constexpr float ADC_FULL = 4095.0f;  // 12-bit
+// F103 VREFINT: 1.20 V typ (datasheet, no factory cal cell on F1).
+static constexpr float VREFINT_VOLTS = 1.20f;
 
-static float readAdcVolts(const AdcChannel &ch) {
+// Actual VDDA from the internal bandgap: Vdda = 1.20 * 4095 / raw(VREFINT).
+// Measured once per ADC frame; all rail voltages use it instead of a fixed
+// 3.3 V, so readings stay correct as the MCU supply drifts. Residual absolute
+// error is the VREFINT part-to-part spread (typ ±3%); divider ratios in kAdc
+// absorb it at calibration time.
+static float readVdda() {
+  uint32_t sum = 0;
+#ifdef AVREF
+  for (uint8_t i = 0; i < ADC_SAMPLES; i++) sum += analogRead(AVREF);
+  float raw = (float)sum / ADC_SAMPLES;
+  if (raw > 1.0f) return VREFINT_VOLTS * ADC_FULL / raw;
+#endif
+  return ADC_VREF_NOM;
+}
+
+static float readAdcVolts(const AdcChannel &ch, float vdda) {
   uint32_t sum = 0;
   for (uint8_t i = 0; i < ADC_SAMPLES; i++) sum += analogRead(ch.arduinoPin);
-  return (float)sum / ADC_SAMPLES / ADC_FULL * ADC_VREF * ch.ratio;
+  return (float)sum / ADC_SAMPLES / ADC_FULL * vdda * ch.ratio;
 }
 
 #ifdef BLUEPILL_TEST
@@ -108,17 +125,20 @@ static float mockCapacitor() {
 #endif
 
 static void sendAdc() {
+  float vdda = readVdda();
   Serial3.print(F("ADC"));
   for (size_t i = 0; i < kNumAdc; i++) {
     Serial3.print(F(" "));
     Serial3.print(kAdc[i].name);
     Serial3.print(F(":"));
-    Serial3.print(readAdcVolts(kAdc[i]), 2);
+    Serial3.print(readAdcVolts(kAdc[i], vdda), 2);
   }
 #ifdef BLUEPILL_TEST
   Serial3.print(F(" 5V5_IN:"));
   Serial3.print(mockCapacitor(), 2);
 #endif
+  Serial3.print(F(" VCC:"));
+  Serial3.print(vdda, 2);
   Serial3.print(F("\n"));
 }
 
