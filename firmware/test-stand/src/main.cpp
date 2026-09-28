@@ -77,9 +77,9 @@ struct AdcChannel {
   float ratio;
 };
 static const AdcChannel kAdc[] = {
-  {"VSYS",    PA1, 12.96f}, // calibrated 2026-09-22: 20.35 read at 23.97 meter
-  {"24V_IN1", PA2, 12.86f}, // calibrated 2026-09-22: 23.44 read at 23.97 meter
-  {"24V_IN2", PA3, 11.0f},  // voltage divider 47k / 4k7
+  {"VSYS",    PA1, 11.00f}, // re-trimmed 2026-09-28, zeners removed: 28.74 read at 24.40 meter
+  {"24V_IN1", PA2, 10.93f}, // re-trimmed 2026-09-28, zeners removed: 28.70 read at 24.40 meter
+  {"24V_IN2", PA3, 10.84f}, // re-trimmed 2026-09-28, zeners removed: 27.72 read at 23.96 meter
 #ifndef BLUEPILL_TEST
   {"5V5_IN",  PC0,  2.0f},   // voltage divider 100k/100k (re-trim after S/H fix)
 #endif
