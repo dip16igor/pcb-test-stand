@@ -11,15 +11,8 @@
 // UART3 115200 8N1 (spec §2.3, §3.5).
 // Custom PCB: PC10 (TX) / PC11 (RX) — needs AFIO remap from default PB10/PB11,
 // done via setTx/setRx before begin().
-// BluePill test build (-D BLUEPILL_TEST, F103C8 LQFP48): PC10/PC11 don't exist,
-// use default PB10 (TX) / PB11 (RX).
-#ifdef BLUEPILL_TEST
-#define PC_UART_TX PB10
-#define PC_UART_RX PB11
-#else
 #define PC_UART_TX PC10
 #define PC_UART_RX PC11
-#endif
 static constexpr uint32_t UART_BAUD = 115200;
 static constexpr size_t LINE_BUF_SIZE = 128;  // spec: min 64 bytes
 
@@ -32,6 +25,7 @@ struct PinEntry {
 // Pin table per spec §3.3, with user clarification PB3 = OUT (CE2).
 // Order kept stable: used for STATUS dump order.
 static const PinEntry kPins[] = {
+  {"PIN_PA0",  PA0,  false},  // KEY (active-HIGH: external 100k pull-down, button to VCC)
   {"PIN_PA4",  PA4,  true},   // PWR2
   {"PIN_PA5",  PA5,  true},   // EN_7V
   {"PIN_PA6",  PA6,  true},   // EN_12V
@@ -47,30 +41,22 @@ static const PinEntry kPins[] = {
   {"PIN_PB8",  PB8,  true},   // LED1
   {"PIN_PB9",  PB9,  true},   // LED2
   {"PIN_PB15", PB15, false},  // COMP2
-// BluePill (LQFP48) has no PC2-PC12: excluded from test build (ERR INVALID_PIN).
-#ifndef BLUEPILL_TEST
-  {"PIN_PC2",  PC2,  false},  // PG
-  {"PIN_PC3",  PC3,  false},  // KEY
+  {"PIN_PC3",  PC3,  false},  // spare input
   {"PIN_PC4",  PC4,  true},   // PWR1
   {"PIN_PC5",  PC5,  true},   // EN
   {"PIN_PC8",  PC8,  false},  // COMP1
   {"PIN_PC9",  PC9,  false},  // STAT2_2
   {"PIN_PC12", PC12, false},  // PG2
-#endif
   {"PIN_PC13", PC13, true},   // POWER1
   {"PIN_PC14", PC14, true},   // POWER2
   {"PIN_PC15", PC15, true},   // EN_24V2
-// BluePill (LQFP48) has no PD0/PD2: excluded from test build.
-#ifndef BLUEPILL_TEST
   {"PIN_PD0",  PD0,  true},   // LED0
   {"PIN_PD2",  PD2,  false},  // STAT1_2
-#endif
 };
 static constexpr size_t kNumPins = sizeof(kPins) / sizeof(kPins[0]);
 
-// Analog rails (v1.1.0): resistor dividers from the schematic, Vref 3.3 V.
+// Analog rails (v1.1.0): resistor dividers from the schematic.
 // 47k/4k7 -> ratio 11.0 (36 V full scale); 100k/100k -> ratio 2.0.
-// BluePill (LQFP48) has no PC0: 5V5_IN excluded from the test build.
 struct AdcChannel {
   const char *name;
   uint32_t arduinoPin;
@@ -80,9 +66,7 @@ static const AdcChannel kAdc[] = {
   {"VSYS",    PA1, 11.00f}, // re-trimmed 2026-09-28, zeners removed: 28.74 read at 24.40 meter
   {"24V_IN1", PA2, 10.93f}, // re-trimmed 2026-09-28, zeners removed: 28.70 read at 24.40 meter
   {"24V_IN2", PA3, 10.84f}, // re-trimmed 2026-09-28, zeners removed: 27.72 read at 23.96 meter
-#ifndef BLUEPILL_TEST
   {"5V5_IN",  PC0,  2.0f},   // voltage divider 100k/100k (re-trim after S/H fix)
-#endif
 };
 static constexpr size_t kNumAdc = sizeof(kAdc) / sizeof(kAdc[0]);
 static constexpr uint8_t ADC_SAMPLES = 16;  // mean over 16 conversions
@@ -112,18 +96,6 @@ static float readAdcVolts(const AdcChannel &ch, float vdda) {
   return (float)sum / ADC_SAMPLES / ADC_FULL * vdda * ch.ratio;
 }
 
-#ifdef BLUEPILL_TEST
-// BluePill has no PC0: synthesize 5V5_IN as a capacitor charge/discharge
-// triangle 0 -> 5.5 V -> 0 over ~4 min, so GUI/chart paths get exercised.
-static float mockCapacitor() {
-  constexpr uint32_t PERIOD_MS = 4UL * 60UL * 1000UL;
-  constexpr float VMAX = 5.5f;
-  float phase = (millis() % PERIOD_MS) / (float)PERIOD_MS;
-  float frac = phase < 0.5f ? phase * 2.0f : (1.0f - phase) * 2.0f;
-  return frac * VMAX;
-}
-#endif
-
 static void sendAdc() {
   float vdda = readVdda();
   Serial3.print(F("ADC"));
@@ -133,10 +105,6 @@ static void sendAdc() {
     Serial3.print(F(":"));
     Serial3.print(readAdcVolts(kAdc[i], vdda), 2);
   }
-#ifdef BLUEPILL_TEST
-  Serial3.print(F(" 5V5_IN:"));
-  Serial3.print(mockCapacitor(), 2);
-#endif
   Serial3.print(F(" VCC:"));
   Serial3.print(vdda, 2);
   Serial3.print(F("\n"));
@@ -180,6 +148,107 @@ static const InterlockPair kInterlock[] = {
 static constexpr size_t kNumInterlock =
     sizeof(kInterlock) / sizeof(kInterlock[0]);
 
+// Power sequencer (v1.3.0): KEY hold drives staged power on/off.
+// KEY (PA0) is active-HIGH: external 100k pull-down, button drives VCC.
+// Non-blocking: steps run off millis() so UART stays responsive.
+static const char *kPowerSeq[] = {
+  "PIN_PC13",  // POWER1
+  "PIN_PC15",  // EN_24V2
+  "PIN_PC5",   // EN
+  "PIN_PC4",   // PWR1
+  "PIN_PA7",   // EN_24V
+  "PIN_PA6",   // EN_12V
+  "PIN_PA5",   // EN_7V
+};
+static constexpr size_t kPowerSeqLen = sizeof(kPowerSeq) / sizeof(kPowerSeq[0]);
+static constexpr uint32_t kPowerStepMs = 500;   // rail-to-rail delay
+static constexpr uint32_t kKeyOnMs = 50;        // POWER_OFF -> start sequence
+static constexpr uint32_t kKeyOffMs = 4000;     // POWER_ON -> STATE off, pins 2 s later
+static constexpr uint32_t kPinsOffDelayMs = 2000;
+
+enum PowerState : uint8_t { POWER_OFF, POWERING_ON, POWER_ON, POWERING_OFF };
+static PowerState powerState = POWER_OFF;
+static size_t powerStep = 0;
+static uint32_t powerStepDue = 0;
+static uint32_t keyPressStart = 0;  // 0 = key idle
+static bool keyArmed = true;        // false until release after an action
+static uint32_t pinsOffDue = 0;     // POWERING_OFF -> pins LOW deadline
+
+// Drive an output HIGH through the interlock (partner forced LOW first).
+// Shared by SET and the sequencer.
+static void outputOn(const PinEntry *p) {
+  if (interlockEnabled) {
+    for (size_t i = 0; i < kNumInterlock; i++) {
+      const char *partner = nullptr;
+      if (strcmp(p->name, kInterlock[i].a) == 0) partner = kInterlock[i].b;
+      else if (strcmp(p->name, kInterlock[i].b) == 0) partner = kInterlock[i].a;
+      if (partner != nullptr) {
+        const PinEntry *q = findPin(partner);
+        if (q != nullptr) digitalWrite(q->arduinoPin, LOW);
+      }
+    }
+  }
+  digitalWrite(p->arduinoPin, HIGH);
+}
+
+static const char *powerStateName() {
+  switch (powerState) {
+    case POWER_ON: return "POWER_ON";
+    case POWERING_ON: return "POWERING_ON";
+    case POWERING_OFF: return "POWERING_OFF";
+    default: return "POWER_OFF";
+  }
+}
+static void powerTask() {
+  const PinEntry *key = findPin("PIN_PA0");  // KEY, active-HIGH
+  bool pressed = (key != nullptr) && (digitalRead(key->arduinoPin) == HIGH);
+  uint32_t now = millis();
+  if (!pressed) {
+    keyPressStart = 0;
+    keyArmed = true;
+  } else if (keyPressStart == 0) {
+    keyPressStart = now;
+  }
+  uint32_t held = (pressed && keyPressStart != 0) ? (now - keyPressStart) : 0;
+
+  if (powerState == POWER_OFF) {
+    if (keyArmed && pressed && held >= kKeyOnMs) {
+      keyArmed = false;  // require release before the next trigger
+      powerState = POWERING_ON;
+      powerStep = 0;
+      powerStepDue = now;  // first rail now, then every 50 ms
+    }
+    return;
+  }
+  if (powerState == POWERING_ON) {
+    if ((int32_t)(now - powerStepDue) >= 0) {
+      const PinEntry *p = findPin(kPowerSeq[powerStep]);
+      if (p != nullptr && p->isOutput) outputOn(p);
+      powerStep++;
+      powerStepDue = now + kPowerStepMs;
+      if (powerStep >= kPowerSeqLen) {
+        powerState = POWER_ON;
+        Serial3.print(F("STATE POWER_ON\n"));
+      }
+    }
+    return;
+  }
+  // POWER_ON: 4 s hold flips STATE immediately; pins follow 2 s later.
+  if (keyArmed && pressed && held >= kKeyOffMs) {
+    keyArmed = false;
+    powerState = POWERING_OFF;
+    pinsOffDue = now + kPinsOffDelayMs;
+    Serial3.print(F("STATE POWER_OFF\n"));
+  }
+  if (powerState == POWERING_OFF && (int32_t)(now - pinsOffDue) >= 0) {
+    for (size_t i = 0; i < kPowerSeqLen; i++) {
+      const PinEntry *p = findPin(kPowerSeq[i]);
+      if (p != nullptr && p->isOutput) digitalWrite(p->arduinoPin, LOW);
+    }
+    powerState = POWER_OFF;
+  }
+}
+
 // Mutates `line` in place with strtok; must be NUL-terminated, newline stripped.
 static void handleLine(char *line) {
   // Skip empty lines.
@@ -198,6 +267,10 @@ static void handleLine(char *line) {
     Serial3.println(FW_DATE);
   } else if (strcmp(cmd, "STATUS") == 0) {
     sendStatus();
+  } else if (strcmp(cmd, "STATE") == 0) {
+    Serial3.print(F("STATE "));
+    Serial3.print(powerStateName());
+    Serial3.print(F("\n"));
   } else if (strcmp(cmd, "ADC") == 0) {
     sendAdc();
   } else if (strcmp(cmd, "INTERLOCK") == 0) {
@@ -245,20 +318,9 @@ static void handleLine(char *line) {
       return;
     }
     if (strcmp(state, "ON") == 0) {
-      // Interlock (v1.2.0): partner goes LOW first, then this pin HIGH.
-      // OFF needs nothing. Missing partner (BluePill subset) is skipped.
-      if (interlockEnabled) {
-        for (size_t i = 0; i < kNumInterlock; i++) {
-          const char *partner = nullptr;
-          if (strcmp(pinName, kInterlock[i].a) == 0) partner = kInterlock[i].b;
-          else if (strcmp(pinName, kInterlock[i].b) == 0) partner = kInterlock[i].a;
-          if (partner != nullptr) {
-            const PinEntry *q = findPin(partner);
-            if (q != nullptr) digitalWrite(q->arduinoPin, LOW);
-          }
-        }
-      }
-      digitalWrite(p->arduinoPin, HIGH);
+      // Interlock (v1.2.0): partner goes LOW first, then this pin HIGH
+      // (shared outputOn helper, also used by the sequencer).
+      outputOn(p);
       Serial3.print(F("OK "));
       Serial3.print(p->name);
       Serial3.print(F(" ON\n"));
@@ -281,22 +343,20 @@ void setup() {
   // below assumes 12-bit (ADC_FULL 4095). Without this every rail reads
   // ~1/4 of the true voltage.
   analogReadResolution(12);
-#ifdef BLUEPILL_TEST
-  // Free PA15/PB3/PB4 (JTAG) as GPIO; SWD on PA13/PA14 keeps working.
-  __HAL_RCC_AFIO_CLK_ENABLE();
-  __HAL_AFIO_REMAP_SWJ_NOJTAG();
-#endif
-  // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up.
+  // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up — except KEY (PA0,
+  // active-HIGH) which has an external 100k pull-down, so plain INPUT.
   for (size_t i = 0; i < kNumPins; i++) {
     if (kPins[i].isOutput) {
       pinMode(kPins[i].arduinoPin, OUTPUT);
       digitalWrite(kPins[i].arduinoPin, LOW);
+    } else if (strcmp(kPins[i].name, "PIN_PA0") == 0) {
+      pinMode(kPins[i].arduinoPin, INPUT);
     } else {
       pinMode(kPins[i].arduinoPin, INPUT_PULLUP);
     }
   }
 
-  // FW-1: UART3 (custom PCB: PC10/PC11 remapped; BluePill test: PB10/PB11).
+  // FW-1: UART3 on PC10 (TX) / PC11 (RX), remapped from default PB10/PB11.
   Serial3.setTx(PC_UART_TX);
   Serial3.setRx(PC_UART_RX);
   Serial3.begin(UART_BAUD);
@@ -339,4 +399,5 @@ void loop() {
       }
     }
   }
+  powerTask();  // KEY-hold power sequencer (v1.3.0), non-blocking
 }

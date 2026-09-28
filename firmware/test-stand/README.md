@@ -19,14 +19,7 @@ VS Code + PlatformIO extension, then build. Or CLI:
 %USERPROFILE%\.platformio\penv\Scripts\pio.exe run -e genericSTM32F103RE
 ```
 
-Environments (`firmware/test-stand/platformio.ini`):
-
-| env | target | use |
-|---|---|---|
-| `genericSTM32F103RE` | custom PCB | production, UART3 on PC10/PC11, full 27-pin table |
-| `bluepill_f103c8` | BluePill | logic/protocol testing, UART3 on PB10/PB11, 18-pin subset (PC2–PC12, PD0/PD2 don't exist on LQFP48 → `ERR INVALID_PIN`); releases JTAG so PA15/PB3 work as GPIO, SWD kept |
-
-Upload: `pio run -e <env> -t upload` (ST-Link).
+Build: `pio run -e genericSTM32F103RE`. Upload: `pio run -e genericSTM32F103RE -t upload` (ST-Link).
 
 ## Pin table (spec §3.3, PB3 = OUT per clarification)
 
@@ -34,9 +27,10 @@ Outputs (GUI checkboxes, reset to LOW): PA4 PWR2, PA5 EN_7V, PA6 EN_12V,
 PA7 EN_24V, PA11 CE1, PB3 CE2, PB8 LED1, PB9 LED2, PC4 PWR1, PC5 EN,
 PC13 POWER1, PC14 POWER2, PC15 EN_24V2, PD0 LED0.
 
-Inputs (GUI LEDs, pull-up): PA8 PG1, PA12 STAT2_1, PA15 STAT1_1, PB0 ALERT,
-PB1 PGOOD, PB2 PGOOD2, PB15 COMP2, PC2 PG, PC3 KEY, PC8 COMP1, PC9 STAT2_2,
-PC12 PG2, PD2 STAT1_2.
+Inputs (GUI LEDs, pull-up; KEY on PA0 is active-HIGH with external 100k
+pull-down, button to VCC): PA0 KEY, PA8 PG1, PA12 STAT2_1, PA15 STAT1_1,
+PB0 ALERT, PB1 PGOOD, PB2 PGOOD2, PB15 COMP2, PC2 PG, PC3 spare, PC8 COMP1,
+PC9 STAT2_2, PC12 PG2, PD2 STAT1_2.
 
 ## Protocol (spec §3.5)
 
@@ -51,22 +45,27 @@ Oversize lines (>127 chars) are discarded to the next newline.
 SET PIN_PA4 ON    ->  OK PIN_PA4 ON | ERR INVALID_PIN | ERR PIN_IS_INPUT
 GET PIN_PA8       ->  PIN_PA8 OFF  | ERR INVALID_PIN
 STATUS            ->  STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...
-ADC               ->  ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48 VCC:3.28
+STATE             ->  STATE POWER_OFF | STATE POWERING_ON | STATE POWER_ON | STATE POWERING_OFF
 INTERLOCK OFF     ->  OK INTERLOCK OFF | query INTERLOCK -> INTERLOCK ON
 PING              ->  PONG
 VERSION           ->  FW v1.2.0 2026-09-12
-```
 Interlock (v1.2.0, FW-9, default ON): SETting POWER1/POWER2 or PWR1/PWR2 ON
 forces the partner LOW first; OFF needs nothing. GUI header checkbox
 toggles the mode; terminal users get the same protection automatically.
+
+Power sequencer (v1.3.0): KEY (PA0, active-HIGH, external 100k pull-down)
+hold drives staged power. `POWER_OFF` + 50 ms hold starts the chain with 500 ms
+between rails: POWER1 → EN_24V2 → EN → PWR1 → EN_24V → EN_12V → EN_7V,
+then `STATE POWER_ON` (announced as `STATE POWER_ON`). `POWER_ON` + 4 s hold
+announces `STATE POWER_OFF` immediately; the seven rails drop 2 s later
+(`POWERING_OFF` in between). Non-blocking (millis steps), works through the
+interlock, manual SET still overrides any rail. GUI header shows the state.
 
 `VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
 `5V5_IN` (PC0, 100k/100k). Every `ADC` frame starts by sampling the internal
 bandgap (`AVREF`, VREFINT 1.20 V typ): VDDA = 1.20 * 4095 / raw, and all rail
 voltages scale from that VDDA instead of a fixed 3.3 V (trailing `VCC:` field
 shows it). Residual absolute error is the VREFINT part spread (typ ±3%).
-BluePill build synthesizes `5V5_IN` (no PC0):
-capacitor triangle 0→5.5→0 V over ~4 min for GUI/chart testing.
 Verify against a meter on first run — divider tolerances shift readings.
 
 Unknown commands return `ERR UNKNOWN_COMMAND`. Inputs are read live on

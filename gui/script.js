@@ -19,8 +19,7 @@ function setConnected(on) {
 }
 
 // "VSYS:12.34 24V_IN1:24.10 ..." -> overlay readouts. Elements are static
-// (draggable in ?edit); channels that never arrive stay hidden, so the
-// 3-channel BluePill simply never shows 5V5_IN.
+// (draggable in ?edit); channels that never arrive stay hidden.
 function renderAdc(payload) {
   payload.split(' ').filter(x => x).forEach(pair => {
     const idx = pair.indexOf(':');
@@ -39,7 +38,11 @@ function handleFwResp(payload) {
     document.getElementById('fwver').textContent = payload.trim();
     return true;
   }
-  const box = document.getElementById('interlock');
+  const pwr = document.getElementById('pwrstate');
+  if (payload.startsWith('STATE ')) {
+    if (pwr) pwr.textContent = payload.slice(6).trim();
+    return true;
+  }
   if (payload === 'OK INTERLOCK ON' || payload === 'INTERLOCK ON') {
     box.checked = true;
     return true;
@@ -174,6 +177,7 @@ function connect() {
     // Daemon pushes STATUS on its poll loop too; ask explicitly for sync.
     ws.send(JSON.stringify({type: 'CMD', payload: 'STATUS\n'}));
     ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
+    ws.send(JSON.stringify({type: 'CMD', payload: 'STATE\n'}));
     ws.send(JSON.stringify({type: 'CMD', payload: 'INTERLOCK\n'}));
   };
 
@@ -187,6 +191,7 @@ function connect() {
       if (msg.payload === 'CONNECTED') {
         document.getElementById('fwver').textContent = '';
         ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
+        ws.send(JSON.stringify({type: 'CMD', payload: 'STATE\n'}));
         ws.send(JSON.stringify({type: 'CMD', payload: 'INTERLOCK\n'}));
       }
     } else if (msg.type === 'RESP') {

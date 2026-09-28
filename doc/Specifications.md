@@ -59,7 +59,7 @@ The system consists of three independent components:
 | Framework | **Arduino Framework** (stm32duino) |
 | Tools | **PlatformIO** (VS Code extension) |
 | Language | C++ (Arduino API) |
-| Board in PlatformIO | `nucleo_f103re` or `bluepill_f103c8` (depending on actual board) |
+| Board in PlatformIO | `genericSTM32F103RE` |
 | Project Files | `platformio.ini`, `src/main.cpp` (standard PlatformIO structure) |
 
 ### 3.2. STM32 Hardware Configuration
@@ -74,6 +74,7 @@ The system consists of three independent components:
 
 | GPIO | Type | Configuration | Post-Reset Value | GUI Name |
 |------|------|---------------|------------------|----------|
+| PA0 | IN | Ext. 100k pull-down, plain INPUT | — | KEY (active-HIGH, power sequencer) |
 | PA4 | OUT | Push-pull | 0 (LOW) | PWR2 |
 | PA5 | OUT | Push-pull | 0 (LOW) | EN_7V |
 | PA6 | OUT | Push-pull | 0 (LOW) | EN_12V |
@@ -90,7 +91,7 @@ The system consists of three independent components:
 | PB9 | OUT | Push-pull | 0 (LOW) | LED2 |
 | PB15 | IN | Pull-up | — | COMP2 |
 | PC2 | IN | Pull-up | — | PG |
-| PC3 | IN | Pull-up | — | KEY |
+| PC3 | IN | Pull-up | — | spare |
 | PC4 | OUT | Push-pull | 0 (LOW) | PWR1 |
 | PC5 | OUT | Push-pull | 0 (LOW) | EN |
 | PC8 | IN | Pull-up | — | COMP1 |
@@ -136,6 +137,7 @@ The system consists of three independent components:
 | `GET <PIN>` | Query pin state (input or output) | `GET PIN_PA8` | `PIN_PA8 ON` or `PIN_PA8 OFF` or `ERR INVALID_PIN` |
 | `STATUS` | Dump state of **all** pins (inputs and outputs) | `STATUS` | `STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...` |
 | `ADC` (v1.1.0, v1.2.1: VDDA from VREFINT) | Read analog rails in volts (16-sample mean, VREFINT-compensated) | `ADC` | `ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48 VCC:3.28` |
+| `STATE` (v1.3.0) | Query power sequencer state | `STATE` | `STATE POWER_OFF`, `POWERING_ON`, `POWER_ON`, or `POWERING_OFF` (pins drop 2 s after off announcement) |
 | `INTERLOCK [ON\|OFF]` (v1.2.0) | Query/set output interlock mode | `INTERLOCK OFF` | `OK INTERLOCK OFF`, query `INTERLOCK` → `INTERLOCK ON`, bad arg → `ERR INVALID_ARG` |
 | `PING` | Connection check | `PING` | `PONG` |
 
@@ -148,8 +150,7 @@ The system consists of three independent components:
   - `<STATE>`: `ON` (1) or `OFF` (0).
 - `ADC` response format: `<NAME>:<VOLTS>` with 2 decimals. Channels (v1.1.0):
   `VSYS` (PA1, 47k/4k7), `24V_IN1` (PA2, 47k/4k7), `24V_IN2` (PA3, 47k/4k7),
-  `5V5_IN` (PC0, 100k/100k). BluePill test build synthesizes `5V5_IN`
-  (no PC0): capacitor triangle 0→5.5→0 V over ~4 min.
+  `5V5_IN` (PC0, 100k/100k).
 - Command timeout: not specified (loop-based operation).
 - Receive buffer: minimum 64 bytes.
 

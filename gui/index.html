@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-<h1>PCB Test Stand <span id="status" class="unknown">Disconnected</span> <span id="fwver"></span> <label id="ilock"><input type="checkbox" id="interlock" checked> Interlock</label> <a id="editlink" href="?edit" target="_blank" rel="noopener">Edit layout</a></h1>
+<h1>PCB Test Stand <span id="status" class="unknown">Disconnected</span> <span id="fwver"></span> <span id="pwrstate">POWER_OFF</span> <label id="ilock"><input type="checkbox" id="interlock" checked> Interlock</label> <a id="editlink" href="?edit" target="_blank" rel="noopener">Edit layout</a></h1>
 
 <div class="board">
   <img src="static/scheme.png" class="underlay" alt="PCB functional diagram">
@@ -46,11 +46,10 @@
   <div class="indicator unknown" style="top: 48.4%; left: 47.3%;" data-pin="PIN_PD2" data-dir="IN" title="STAT1_2"><span>STAT1_2</span></div>
   <div class="indicator unknown" style="top: 51.1%; left: 47.3%;" data-pin="PIN_PC9" data-dir="IN" title="STAT2_2"><span>STAT2_2</span></div>
   <div class="indicator unknown" style="top: 76.8%; left: 52%;" data-pin="PIN_PB15" data-dir="IN" title="COMP2"><span>COMP2</span></div>
-  <div class="indicator unknown" style="top: 95.9%; left: 21.2%;" data-pin="PIN_PC3" data-dir="IN" title="KEY"><span>KEY</span></div>
+  <div class="indicator unknown" style="top: 95.9%; left: 21.2%;" data-pin="PIN_PA0" data-dir="IN" title="KEY"><span>KEY</span></div>
 
   <!-- Analog readouts (v1.1.0). data-pin carries the layout key (PIN_ + name);
-       data-volt selects the ADC channel. Hidden until first ADC reading;
-       BluePill never sends 5V5_IN, so it stays hidden there. -->
+       data-volt selects the ADC channel. Hidden until first ADC reading. -->
   <div class="voltread" style="top: 24.8%; left: 68.7%;" data-pin="PIN_VSYS" data-volt="VSYS" title="VSYS"><span class="vname">VSYS</span> <span class="vval">—</span></div>
   <div class="voltread" style="top: 11.4%; left: 20.1%;" data-pin="PIN_24V_IN1" data-volt="24V_IN1" title="24V_IN1"><span class="vname">24V_IN1</span> <span class="vval">—</span></div>
   <div class="voltread" style="top: 59.7%; left: 23.1%;" data-pin="PIN_24V_IN2" data-volt="24V_IN2" title="24V_IN2"><span class="vname">24V_IN2</span> <span class="vval">—</span></div>
