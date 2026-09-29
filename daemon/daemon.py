@@ -212,6 +212,7 @@ class Hub:
         self.clients: set[WebSocket] = set()
         self.last_status: str = ""
         self.last_adc: str = ""
+        self.last_pwm: str = ""
         self.refresh = asyncio.Event()  # immediate STATUS re-read (after SET)
         self._was_connected = False
 
@@ -237,6 +238,10 @@ class Hub:
             self.last_adc = s[len("ADC"):].strip()
             log.debug("ADC: %s", self.last_adc)
             return {"type": "ADC", "payload": self.last_adc}
+        if s == "PWM" or s.startswith("PWM "):
+            self.last_pwm = s[len("PWM"):].strip()
+            log.debug("PWM: %s", self.last_pwm)
+            return {"type": "PWM", "payload": self.last_pwm}
         if s.startswith("ERR"):
             log.warning("FW: %s", s)
         else:
@@ -270,13 +275,12 @@ class Hub:
                         and now - self.last_rx > self.link_timeout):
                     log.warning("link silent %.1fs, dropping %s",
                                 now - self.last_rx, self.uart.port_name)
-                    self.last_rx = 0.0
-                    self.uart.drop_requested.set()
                 now = asyncio.get_event_loop().time()
                 if self.refresh.is_set() or now >= next_poll:
                     self.refresh.clear()
                     next_poll = now + self.poll_interval
                     self.uart.tx.put("STATUS\n")
+                    self.uart.tx.put("PWM\n")
                 if now >= next_adc:
                     next_adc = now + self.adc_interval
                     self.uart.tx.put("ADC\n")
@@ -371,6 +375,8 @@ def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
                 await ws.send_json({"type": "STATUS", "payload": hub.last_status})
             if hub.last_adc:
                 await ws.send_json({"type": "ADC", "payload": hub.last_adc})
+            if hub.last_pwm:
+                await ws.send_json({"type": "PWM", "payload": hub.last_pwm})
             while True:
                 msg = await ws.receive_json()
                 if msg.get("type") != "CMD":
@@ -385,8 +391,8 @@ def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
                     continue
                 log.info("WS CMD: %s", payload.strip())
                 hub.uart.tx.put(payload)
-                # A SET changes outputs: re-read STATUS right away.
-                if payload.startswith("SET"):
+                # SET/PWM change outputs: re-read STATUS (and PWM) right away.
+                if payload.startswith("SET") or payload.startswith("PWM"):
                     hub.refresh.set()
         except WebSocketDisconnect:
             pass

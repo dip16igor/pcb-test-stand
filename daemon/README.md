@@ -95,12 +95,15 @@ both intervals to the floor saturates the link and the GUI lags.
   - Server → client: `{"type": "STATUS", "payload": "PIN_PA4:OUT:ON ..."}`
   - Server → client: `{"type": "STATE", "payload": "CONNECTED"}`
     (extension for the GUI connection dot, §GUI-7).
+  - Server → client: `{"type": "PWM", "payload": "PIN_PC6:50 PIN_PC7:0"}`
+    (v1.4.0 duty echo, polled with STATUS; GUI sliders stay in sync).
 - `POST /api/layout` with `{"layout": {"PIN_PA4": {"left": "9%", "top": "6%"}, ...}}`
   rewrites coordinates in `gui/index.html` (edit-mode Save button).
   Only `top`/`left` percentages on known `data-pin` lines change;
-  chart lines additionally persist `width`/`height` px.
+  chart lines additionally persist `width`/`height` px,
+  PWM sliders persist `width` px.
 
-Every `SET` triggers an immediate `STATUS` re-read on top of polling.
+Every `SET`/`PWM` triggers an immediate `STATUS` (+`PWM`) re-read on top of polling.
 
 ## Log
 

@@ -59,6 +59,11 @@
   <!-- 5V5_IN trend chart (0..6 V, 5 min window). Draggable in ?edit; corner
        handle resizes (width/height px persist via Save like coordinates). -->
   <div class="chart" style="top: 84.2%; left: 77.6%; width: 833.8px; height: 246.8px;" data-pin="PIN_CHART_5V5_IN" data-chart="5V5_IN" title="5V5_IN trend"><div class="chead">5V5_IN · 0..6V · 5min</div><canvas></canvas><div class="rhandle"></div></div>
+
+  <!-- PWM outputs (v1.4.0): TIM3 CH1/CH2 on PC6/PC7, 0..100% duty.
+       Draggable in ?edit; width (px) persists via Save like coordinates. -->
+  <div class="pwmslider" style="top: 88%; left: 15%; width: 260px;" data-pin="PIN_PC6" data-pwm="PC6" title="PWM PC6 (TIM3 CH1)"><span class="pname">PWM1</span><input type="range" min="0" max="100" step="1" value="0" data-pin="PIN_PC6"><span class="pval">0%</span><div class="rhandle"></div></div>
+  <div class="pwmslider" style="top: 92%; left: 15%; width: 260px;" data-pin="PIN_PC7" data-pwm="PC7" title="PWM PC7 (TIM3 CH2)"><span class="pname">PWM2</span><input type="range" min="0" max="100" step="1" value="0" data-pin="PIN_PC7"><span class="pval">0%</span><div class="rhandle"></div></div>
 </div>
 
 <div id="editbar" hidden>

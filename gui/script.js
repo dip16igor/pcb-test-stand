@@ -176,6 +176,7 @@ function connect() {
     markAllUnknown();
     // Daemon pushes STATUS on its poll loop too; ask explicitly for sync.
     ws.send(JSON.stringify({type: 'CMD', payload: 'STATUS\n'}));
+    ws.send(JSON.stringify({type: 'CMD', payload: 'PWM\n'}));
     ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
     ws.send(JSON.stringify({type: 'CMD', payload: 'STATE\n'}));
     ws.send(JSON.stringify({type: 'CMD', payload: 'INTERLOCK\n'}));
@@ -187,10 +188,10 @@ function connect() {
     if (msg.type === 'STATUS') {
       parseStatus(msg.payload || '');
     } else if (msg.type === 'STATE') {
-      setConnected(msg.payload === 'CONNECTED');
       if (msg.payload === 'CONNECTED') {
         document.getElementById('fwver').textContent = '';
         ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
+        ws.send(JSON.stringify({type: 'CMD', payload: 'PWM\n'}));
         ws.send(JSON.stringify({type: 'CMD', payload: 'STATE\n'}));
         ws.send(JSON.stringify({type: 'CMD', payload: 'INTERLOCK\n'}));
       }
@@ -200,6 +201,8 @@ function connect() {
       if (!msg.payload) return;
       renderAdc(msg.payload);
       adcCharts(msg.payload, Date.now());
+    } else if (msg.type === 'PWM') {
+      parsePwm(msg.payload || '');
     }
     // Other RESP (OK/ERR echoes) intentionally ignored: next STATUS syncs UI.
   };
@@ -212,6 +215,42 @@ function connect() {
   ws.onclose = schedule;
   ws.onerror = schedule;
 }
+
+// PWM sliders (v1.4.0) -> PWM command. Live label while dragging; firmware
+// value echoed on poll. Debounced so drags don't flood the UART link.
+let pwmTimer = null;
+let pwmPending = null;
+function parsePwm(payload) {
+  payload.split(' ').filter(x => x).forEach(pair => {
+    const idx = pair.indexOf(':');
+    if (idx < 0) return;
+    const box = document.querySelector(`.pwmslider[data-pin="${pair.slice(0, idx)}"]`);
+    if (!box) return;
+    const v = parseInt(pair.slice(idx + 1), 10);
+    if (isNaN(v)) return;
+    const slider = box.querySelector('input[type="range"]');
+    // Don't fight an in-progress drag: only snap back when released.
+    if (document.activeElement !== slider) slider.value = v;
+    box.querySelector('.pval').textContent = v + '%';
+  });
+}
+document.querySelectorAll('.pwmslider input[type="range"]').forEach(slider => {
+  const box = slider.closest('.pwmslider');
+  slider.addEventListener('input', () => {
+    box.querySelector('.pval').textContent = slider.value + '%';
+    pwmPending = `PWM ${slider.dataset.pin} ${slider.value}\n`;
+    if (pwmTimer) return;
+    pwmTimer = setTimeout(() => {
+      pwmTimer = null;
+      if (!pwmPending || !ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({type: 'CMD', payload: pwmPending}));
+    }, 120);
+  });
+  slider.addEventListener('change', () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({type: 'CMD', payload: `PWM ${slider.dataset.pin} ${slider.value}\n`}));
+  });
+});
 
 // Checkbox toggles -> SET command (spec §5.5).
 document.querySelectorAll('input[data-dir="OUT"]').forEach(box => {
@@ -246,7 +285,7 @@ window.addEventListener('resize', () => chartDrawAll(Date.now()));
   const store = 'teststand-layout';
   const saved = JSON.parse(localStorage.getItem(store) || '{}');
 
-  const items = [...document.querySelectorAll('.control, .indicator, .voltread, .chart')];
+  const items = [...document.querySelectorAll('.control, .indicator, .voltread, .chart, .pwmslider')];
   const key = (el) => el.dataset.pin || (el.querySelector('input') || {}).dataset.pin;
   // Apply in-progress arrangement (arrays = pre-chart drafts).
   items.forEach(el => {
@@ -255,7 +294,7 @@ window.addEventListener('resize', () => chartDrawAll(Date.now()));
     if (Array.isArray(p)) { el.style.left = p[0]; el.style.top = p[1]; return; }
     if (p.left) el.style.left = p.left;
     if (p.top) el.style.top = p.top;
-    if (p.width && el.classList.contains('chart')) el.style.width = p.width;
+    if (p.width && (el.classList.contains('chart') || el.classList.contains('pwmslider'))) el.style.width = p.width;
     if (p.height && el.classList.contains('chart')) el.style.height = p.height;
   });
 
@@ -264,6 +303,7 @@ window.addEventListener('resize', () => chartDrawAll(Date.now()));
     const p = pos(el);
     const e = {left: p[0], top: p[1]};
     if (el.classList.contains('chart')) { e.width = el.style.width; e.height = el.style.height; }
+    if (el.classList.contains('pwmslider')) { e.width = el.style.width; }
     return e;
   };
   const save = () => {
@@ -304,8 +344,8 @@ window.addEventListener('resize', () => chartDrawAll(Date.now()));
     el.addEventListener('pointerup', drop);
     el.addEventListener('pointercancel', drop);
   });
-
   // Corner handles resize charts (px); coordinates still drag as usual.
+  // PWM sliders resize width only (height follows the input row).
   document.querySelectorAll('.chart .rhandle').forEach(h => {
     const box = h.closest('.chart');
     h.addEventListener('pointerdown', (ev) => {
@@ -322,6 +362,28 @@ window.addEventListener('resize', () => chartDrawAll(Date.now()));
         window.removeEventListener('pointermove', mv);
         window.removeEventListener('pointerup', up);
         read.textContent = `${key(box)}  ${box.style.width} x ${box.style.height}`;
+        save();
+        serialize();
+      };
+      window.addEventListener('pointermove', mv);
+      window.addEventListener('pointerup', up);
+    });
+  });
+
+  document.querySelectorAll('.pwmslider .rhandle').forEach(h => {
+    const box = h.closest('.pwmslider');
+    h.addEventListener('pointerdown', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const sx = ev.clientX;
+      const w0 = box.offsetWidth;
+      const mv = (e2) => {
+        box.style.width = Math.max(120, w0 + e2.clientX - sx) + 'px';
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', mv);
+        window.removeEventListener('pointerup', up);
+        read.textContent = `${key(box)}  ${box.style.width}`;
         save();
         serialize();
       };

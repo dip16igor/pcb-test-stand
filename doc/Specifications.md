@@ -138,6 +138,7 @@ The system consists of three independent components:
 | `STATUS` | Dump state of **all** pins (inputs and outputs) | `STATUS` | `STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...` |
 | `ADC` (v1.1.0, v1.2.1: VDDA from VREFINT) | Read analog rails in volts (16-sample mean, VREFINT-compensated) | `ADC` | `ADC VSYS:12.34 24V_IN1:24.10 24V_IN2:0.02 5V5_IN:5.48 VCC:3.28` |
 | `STATE` (v1.3.0) | Query power sequencer state | `STATE` | `STATE POWER_OFF`, `POWERING_ON`, `POWER_ON`, or `POWERING_OFF` (pins drop 2 s after off announcement) |
+| `PWM <PIN> <0..100>` (v1.4.0) | Set PWM duty in percent, 1% step | `PWM PIN_PC6 50` | `OK PIN_PC6 50`, bare `PWM` → `PWM PIN_PC6:0 PIN_PC7:0`, bad pin → `ERR INVALID_PIN`, bad value → `ERR INVALID_ARG` |
 | `INTERLOCK [ON\|OFF]` (v1.2.0) | Query/set output interlock mode | `INTERLOCK OFF` | `OK INTERLOCK OFF`, query `INTERLOCK` → `INTERLOCK ON`, bad arg → `ERR INVALID_ARG` |
 | `PING` | Connection check | `PING` | `PONG` |
 

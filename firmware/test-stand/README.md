@@ -46,9 +46,14 @@ SET PIN_PA4 ON    ->  OK PIN_PA4 ON | ERR INVALID_PIN | ERR PIN_IS_INPUT
 GET PIN_PA8       ->  PIN_PA8 OFF  | ERR INVALID_PIN
 STATUS            ->  STATUS PIN_PA4:OUT:ON PIN_PA8:IN:OFF ...
 STATE             ->  STATE POWER_OFF | STATE POWERING_ON | STATE POWER_ON | STATE POWERING_OFF
+PWM PIN_PC6 50   ->  OK PIN_PC6 50 | ERR INVALID_PIN | ERR INVALID_ARG
+PWM              ->  PWM PIN_PC6:0 PIN_PC7:0
 INTERLOCK OFF     ->  OK INTERLOCK OFF | query INTERLOCK -> INTERLOCK ON
 PING              ->  PONG
-VERSION           ->  FW v1.2.0 2026-09-12
+VERSION           ->  FW v1.4.0 2026-09-29
+PWM outputs (v1.4.0): PC6 (TIM3_CH1) + PC7 (TIM3_CH2), 7812.5 Hz, 12-bit duty
+(ARR 4095, prescaler 2 at 64 MHz). Duty in percent 0..100, 1% step.
+GUI sliders send `PWM <PIN> <0..100>`; bare `PWM` dumps both duties.
 Interlock (v1.2.0, FW-9, default ON): SETting POWER1/POWER2 or PWR1/PWR2 ON
 forces the partner LOW first; OFF needs nothing. GUI header checkbox
 toggles the mode; terminal users get the same protection automatically.

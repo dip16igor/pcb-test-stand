@@ -106,7 +106,37 @@ body.editing #editlink { display: none; }
 .voltread.live { display: block; }
 .voltread .vname { color: #ccc; font-size: 14px; margin-right: 8px; }
 .voltread .vval { font-weight: bold; }
-/* Floating trend chart. Size (px) editable via corner handle in ?edit. */
+/* PWM sliders (v1.4.0): label + range + value. Width (px) editable in ?edit. */
+.pwmslider {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+}
+.pwmslider input[type="range"] { flex: 1; min-width: 60px; accent-color: #060; cursor: pointer; }
+.pwmslider .pval { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.pwmslider .rhandle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background: #7fff7f;
+  cursor: ew-resize;
+  display: none;
+}
+body.editing .pwmslider .rhandle { display: block; }
+body.editing .pwmslider { cursor: move; }
+body.editing .pwmslider input[type="range"] { pointer-events: none; }
 .chart {
   position: absolute;
   transform: translate(-50%, -50%);

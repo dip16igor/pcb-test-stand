@@ -2,10 +2,10 @@
 
 // Fallback version/date if not passed via build_flags (see platformio.ini, spec §12.3).
 #ifndef FW_VERSION
-#define FW_VERSION "1.2.0"
+#define FW_VERSION "1.4.0"
 #endif
 #ifndef FW_DATE
-#define FW_DATE "2026-09-12"
+#define FW_DATE "2026-09-29"
 #endif
 
 // UART3 115200 8N1 (spec §2.3, §3.5).
@@ -54,6 +54,56 @@ static const PinEntry kPins[] = {
   {"PIN_PD2",  PD2,  false},  // STAT1_2
 };
 static constexpr size_t kNumPins = sizeof(kPins) / sizeof(kPins[0]);
+
+// PWM outputs (v1.4.0): PC6 = TIM3_CH1, PC7 = TIM3_CH2 (full remap).
+// 64 MHz TIM3CLK / prescaler 2 / ARR 4095 -> 7812.5 Hz, 12-bit duty.
+// Duty stored as percent 0..100; ticks = pct * 4095 / 100.
+static constexpr uint32_t PWM_ARR = 4095;
+static constexpr uint32_t PWM_PRESCALER = 2;
+struct PwmEntry {
+  const char *name;   // protocol name, e.g. "PIN_PC6"
+  uint32_t channel;   // timer channel 1..4
+  uint8_t percent;    // duty 0..100
+};
+static PwmEntry kPwm[] = {
+  {"PIN_PC6", 1, 0},  // TIM3_CH1
+  {"PIN_PC7", 2, 0},  // TIM3_CH2
+};
+static constexpr size_t kNumPwm = sizeof(kPwm) / sizeof(kPwm[0]);
+static HardwareTimer *pwmTimer = nullptr;
+
+static PwmEntry *findPwm(const char *name) {
+  for (size_t i = 0; i < kNumPwm; i++) {
+    if (strcmp(kPwm[i].name, name) == 0) return &kPwm[i];
+  }
+  return nullptr;
+}
+
+static void pwmApply(PwmEntry *e) {
+  uint32_t ticks = ((uint32_t)e->percent * PWM_ARR + 50) / 100;
+  pwmTimer->setCaptureCompare(e->channel, ticks, TICK_COMPARE_FORMAT);
+}
+
+static void pwmInit() {
+  pwmTimer = new HardwareTimer(TIM3);
+  pwmTimer->setPrescaleFactor(PWM_PRESCALER);
+  pwmTimer->setOverflow(PWM_ARR, TICK_FORMAT);
+  pwmTimer->setMode(1, TIMER_OUTPUT_COMPARE_PWM1, PC6);
+  pwmTimer->setMode(2, TIMER_OUTPUT_COMPARE_PWM1, PC7);
+  for (size_t i = 0; i < kNumPwm; i++) pwmApply(&kPwm[i]);
+  pwmTimer->resume();
+}
+
+static void sendPwm() {
+  Serial3.print(F("PWM"));
+  for (size_t i = 0; i < kNumPwm; i++) {
+    Serial3.print(F(" "));
+    Serial3.print(kPwm[i].name);
+    Serial3.print(F(":"));
+    Serial3.print(kPwm[i].percent);
+  }
+  Serial3.print(F("\n"));
+}
 
 // Analog rails (v1.1.0): resistor dividers from the schematic.
 // 47k/4k7 -> ratio 11.0 (36 V full scale); 100k/100k -> ratio 2.0.
@@ -162,7 +212,7 @@ static const char *kPowerSeq[] = {
 };
 static constexpr size_t kPowerSeqLen = sizeof(kPowerSeq) / sizeof(kPowerSeq[0]);
 static constexpr uint32_t kPowerStepMs = 500;   // rail-to-rail delay
-static constexpr uint32_t kKeyOnMs = 50;        // POWER_OFF -> start sequence
+static constexpr uint32_t kKeyOnMs = 500;       // POWER_OFF -> press must exceed this
 static constexpr uint32_t kKeyOffMs = 4000;     // POWER_ON -> STATE off, pins 2 s later
 static constexpr uint32_t kPinsOffDelayMs = 2000;
 
@@ -273,6 +323,35 @@ static void handleLine(char *line) {
     Serial3.print(F("\n"));
   } else if (strcmp(cmd, "ADC") == 0) {
     sendAdc();
+  } else if (strcmp(cmd, "PWM") == 0) {
+    char *pinName = strtok(nullptr, " \t");
+    if (pinName == nullptr) {
+      sendPwm();
+    } else {
+      char *arg = strtok(nullptr, " \t");
+      if (arg == nullptr) {
+        Serial3.print(F("ERR INVALID_ARG\n"));
+        return;
+      }
+      PwmEntry *e = findPwm(pinName);
+      if (e == nullptr) {
+        Serial3.print(F("ERR INVALID_PIN\n"));
+        return;
+      }
+      char *end = nullptr;
+      long v = strtol(arg, &end, 10);
+      if (end == arg || *end != '\0' || v < 0 || v > 100) {
+        Serial3.print(F("ERR INVALID_ARG\n"));
+        return;
+      }
+      e->percent = (uint8_t)v;
+      pwmApply(e);
+      Serial3.print(F("OK "));
+      Serial3.print(e->name);
+      Serial3.print(F(" "));
+      Serial3.print(e->percent);
+      Serial3.print(F("\n"));
+    }
   } else if (strcmp(cmd, "INTERLOCK") == 0) {
     char *arg = strtok(nullptr, " \t");
     if (arg == nullptr) {
@@ -360,7 +439,7 @@ void setup() {
   Serial3.setTx(PC_UART_TX);
   Serial3.setRx(PC_UART_RX);
   Serial3.begin(UART_BAUD);
-  // Boot banner: proves firmware runs and UART pins are correct.
+  pwmInit();  // TIM3 PC6/PC7, 7812.5 Hz, 0% duty
   // Shows on every power-on/reset without any command.
   delay(100);  // let the USB-UART adapter enumerate
   Serial3.print(F("FW v"));
