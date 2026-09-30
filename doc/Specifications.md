@@ -101,6 +101,7 @@ The system consists of three independent components:
 | PC14 | OUT | Open-drain, active-LOW | Sinking (logical ON) | POWER2 |
 | PC15 | OUT | Push-pull | 0 (LOW) | EN_24V2 |
 | PD0 | OUT | Push-pull | 0 (LOW) | LED0 |
+| PD1 | IN | Pull-up | — | spare (PD01 remap) |
 | PD2 | IN | Pull-up | — | STAT1_2 |
 
 **Notes:**

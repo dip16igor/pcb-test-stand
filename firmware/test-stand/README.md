@@ -30,7 +30,7 @@ PC13 POWER1, PC14 POWER2 (open-drain active-LOW: ON = sinking LOW, OFF = release
 Inputs (GUI LEDs, pull-up; KEY on PA0 is active-HIGH with external 100k
 pull-down, button to VCC): PA0 KEY, PA8 PG1, PA12 STAT2_1, PA15 STAT1_1,
 PB0 ALERT, PB1 PGOOD, PB2 PGOOD2, PB15 COMP2, PC2 PG, PC3 spare, PC8 COMP1,
-PC9 STAT2_2, PC12 PG2, PD2 STAT1_2.
+PC9 STAT2_2, PC12 PG2, PD1 spare (PD01 remap), PD2 STAT1_2.
 
 ## Protocol (spec §3.5)
 

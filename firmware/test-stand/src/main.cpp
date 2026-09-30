@@ -51,6 +51,7 @@ static const PinEntry kPins[] = {
   {"PIN_PC14", PC14, true},   // POWER2
   {"PIN_PC15", PC15, true},   // EN_24V2
   {"PIN_PD0",  PD0,  true},   // LED0
+  {"PIN_PD1",  PD1,  false},  // spare input (PD01 remap)
   {"PIN_PD2",  PD2,  false},  // STAT1_2
 };
 static constexpr size_t kNumPins = sizeof(kPins) / sizeof(kPins[0]);
@@ -441,7 +442,10 @@ void setup() {
   // below assumes 12-bit (ADC_FULL 4095). Without this every rail reads
   // ~1/4 of the true voltage.
   analogReadResolution(12);
-  // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up — except KEY (PA0,
+  // PD0/PD1 live on OSC_IN/OSC_OUT: remap them to GPIO (needs HSI, no HSE).
+  // Without this PD0 stays a dead oscillator pin (the LED0 fault).
+  __HAL_RCC_AFIO_CLK_ENABLE();
+  __HAL_AFIO_REMAP_PD01_ENABLE();
   // active-HIGH) which has an external 100k pull-down, so plain INPUT,
   // and POWER2 (PC14, open-drain active-LOW) which resets sinking (ON).
   // POWER1 resets released (OFF).
