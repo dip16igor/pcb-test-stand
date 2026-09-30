@@ -527,13 +527,22 @@ def main(argv=None) -> None:
         server = uvicorn.Server(config)
         try:
             await server.serve()
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            pass
         finally:
             bridge.cancel()
             uart.stop()
+            try:
+                await asyncio.wait_for(server.shutdown(), timeout=5)
+            except Exception:
+                pass
 
     log.info("serving HTTP on 127.0.0.1:%d", args.http_port)
-    asyncio.run(lifespan_wrapper())
-
+    try:
+        asyncio.run(lifespan_wrapper())
+    except KeyboardInterrupt:
+        log.info("stopped by Ctrl+C")
+        uart.stop()
 
 if __name__ == "__main__":
     main()
