@@ -164,22 +164,39 @@ static char lineBuf[LINE_BUF_SIZE];
 static size_t lineLen = 0;
 static bool lineOverflow = false;
 
+// POWER2 (PC14) is open-drain, active-LOW: logical ON = sinking LOW
+// (drain closed), logical OFF = released HIGH-Z.
+static bool isPower2(const PinEntry *p) {
+  return strcmp(p->name, "PIN_PC14") == 0;
+}
+
+static void outputOff(const PinEntry *p) {
+  if (isPower2(p)) digitalWrite(p->arduinoPin, HIGH);  // release
+  else digitalWrite(p->arduinoPin, LOW);
+}
+
+// Logical level: POWER2 reads inverted (sinking LOW = ON).
+static bool logicalRead(const PinEntry *p) {
+  int v = digitalRead(p->arduinoPin);
+  if (isPower2(p)) return v == LOW;
+  return v == HIGH;
+}
+
 static const PinEntry *findPin(const char *name) {
   for (size_t i = 0; i < kNumPins; i++) {
-    if (strcmp(kPins[i].name, name) == 0) return &kPins[i];
+    const PinEntry &p = kPins[i];
+    if (strcmp(p.name, name) == 0) return &p;
   }
   return nullptr;
 }
-
 static void sendStatus() {
   Serial3.print(F("STATUS"));
   for (size_t i = 0; i < kNumPins; i++) {
     const PinEntry &p = kPins[i];
-    int v = digitalRead(p.arduinoPin);
     Serial3.print(F(" "));
     Serial3.print(p.name);
     Serial3.print(p.isOutput ? F(":OUT:") : F(":IN:"));
-    Serial3.print(v == HIGH ? F("ON") : F("OFF"));
+    Serial3.print(logicalRead(&p) ? F("ON") : F("OFF"));
   }
   Serial3.print(F("\n"));
 }
@@ -224,8 +241,9 @@ static uint32_t keyPressStart = 0;  // 0 = key idle
 static bool keyArmed = true;        // false until release after an action
 static uint32_t pinsOffDue = 0;     // POWERING_OFF -> pins LOW deadline
 
-// Drive an output HIGH through the interlock (partner forced LOW first).
-// Shared by SET and the sequencer.
+// Drive an output ON through the interlock (partner forced OFF first).
+// Shared by SET and the sequencer. POWER2 logic lives in the early helpers
+// above (isPower2/outputOff/logicalRead); outputOn inverts the drive here.
 static void outputOn(const PinEntry *p) {
   if (interlockEnabled) {
     for (size_t i = 0; i < kNumInterlock; i++) {
@@ -234,11 +252,12 @@ static void outputOn(const PinEntry *p) {
       else if (strcmp(p->name, kInterlock[i].b) == 0) partner = kInterlock[i].a;
       if (partner != nullptr) {
         const PinEntry *q = findPin(partner);
-        if (q != nullptr) digitalWrite(q->arduinoPin, LOW);
+        if (q != nullptr) outputOff(q);
       }
     }
   }
-  digitalWrite(p->arduinoPin, HIGH);
+  if (isPower2(p)) digitalWrite(p->arduinoPin, LOW);  // sink
+  else digitalWrite(p->arduinoPin, HIGH);
 }
 
 static const char *powerStateName() {
@@ -293,7 +312,7 @@ static void powerTask() {
   if (powerState == POWERING_OFF && (int32_t)(now - pinsOffDue) >= 0) {
     for (size_t i = 0; i < kPowerSeqLen; i++) {
       const PinEntry *p = findPin(kPowerSeq[i]);
-      if (p != nullptr && p->isOutput) digitalWrite(p->arduinoPin, LOW);
+      if (p != nullptr && p->isOutput) outputOff(p);
     }
     powerState = POWER_OFF;
   }
@@ -377,9 +396,9 @@ static void handleLine(char *line) {
       Serial3.print(F("ERR INVALID_PIN\n"));
       return;
     }
-    int v = digitalRead(p->arduinoPin);
+    bool on = logicalRead(p);
     Serial3.print(p->name);
-    Serial3.print(v == HIGH ? F(" ON\n") : F(" OFF\n"));
+    Serial3.print(on ? F(" ON\n") : F(" OFF\n"));
   } else if (strcmp(cmd, "SET") == 0) {
     char *pinName = strtok(nullptr, " \t");
     char *state = strtok(nullptr, " \t");
@@ -404,7 +423,7 @@ static void handleLine(char *line) {
       Serial3.print(p->name);
       Serial3.print(F(" ON\n"));
     } else if (strcmp(state, "OFF") == 0) {
-      digitalWrite(p->arduinoPin, LOW);
+      outputOff(p);
       Serial3.print(F("OK "));
       Serial3.print(p->name);
       Serial3.print(F(" OFF\n"));
@@ -424,12 +443,13 @@ void setup() {
   analogReadResolution(12);
   // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up — except KEY (PA0,
   // active-HIGH) which has an external 100k pull-down, so plain INPUT,
-  // and POWER2 (PC14, open-drain: ON = released/high-Z, OFF = sinks LOW).
+  // and POWER2 (PC14, open-drain active-LOW) which resets sinking (ON).
+  // POWER1 resets released (OFF).
   for (size_t i = 0; i < kNumPins; i++) {
     if (kPins[i].isOutput) {
       if (strcmp(kPins[i].name, "PIN_PC14") == 0) {
         pinMode(kPins[i].arduinoPin, OUTPUT_OPEN_DRAIN);
-        digitalWrite(kPins[i].arduinoPin, LOW);
+        digitalWrite(kPins[i].arduinoPin, LOW);  // sink = logical ON
       } else {
         pinMode(kPins[i].arduinoPin, OUTPUT);
         digitalWrite(kPins[i].arduinoPin, LOW);
@@ -440,7 +460,6 @@ void setup() {
       pinMode(kPins[i].arduinoPin, INPUT_PULLUP);
     }
   }
-  // FW-1: UART3 on PC10 (TX) / PC11 (RX), remapped from default PB10/PB11.
   Serial3.setTx(PC_UART_TX);
   Serial3.setRx(PC_UART_RX);
   Serial3.begin(UART_BAUD);

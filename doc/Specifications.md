@@ -98,7 +98,7 @@ The system consists of three independent components:
 | PC9 | IN | Pull-up | — | STAT2_2 |
 | PC12 | IN | Pull-up | — | PG2 |
 | PC13 | OUT | Push-pull | 0 (LOW) | POWER1 |
-| PC14 | OUT | Open-drain | High-Z (released) | POWER2 |
+| PC14 | OUT | Open-drain, active-LOW | Sinking (logical ON) | POWER2 |
 | PC15 | OUT | Push-pull | 0 (LOW) | EN_24V2 |
 | PD0 | OUT | Push-pull | 0 (LOW) | LED0 |
 | PD2 | IN | Pull-up | — | STAT1_2 |
