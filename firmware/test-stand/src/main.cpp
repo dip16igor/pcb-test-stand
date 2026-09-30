@@ -14,7 +14,7 @@
 #define PC_UART_TX PC10
 #define PC_UART_RX PC11
 static constexpr uint32_t UART_BAUD = 115200;
-static constexpr size_t LINE_BUF_SIZE = 128;  // spec: min 64 bytes
+static constexpr size_t LINE_BUF_SIZE = 512;  // full 29-pin STATUS is ~470 chars
 
 struct PinEntry {
   const char *name;   // protocol name, e.g. "PIN_PA4"
@@ -41,6 +41,7 @@ static const PinEntry kPins[] = {
   {"PIN_PB8",  PB8,  true},   // LED1
   {"PIN_PB9",  PB9,  true},   // LED2
   {"PIN_PB15", PB15, false},  // COMP2
+  {"PIN_PC2",  PC2,  false},  // PG
   {"PIN_PC3",  PC3,  false},  // spare input
   {"PIN_PC4",  PC4,  true},   // PWR1
   {"PIN_PC5",  PC5,  true},   // EN
