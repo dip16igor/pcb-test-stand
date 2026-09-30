@@ -423,18 +423,23 @@ void setup() {
   // ~1/4 of the true voltage.
   analogReadResolution(12);
   // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up — except KEY (PA0,
-  // active-HIGH) which has an external 100k pull-down, so plain INPUT.
+  // active-HIGH) which has an external 100k pull-down, so plain INPUT,
+  // and POWER2 (PC14, open-drain: ON = released/high-Z, OFF = sinks LOW).
   for (size_t i = 0; i < kNumPins; i++) {
     if (kPins[i].isOutput) {
-      pinMode(kPins[i].arduinoPin, OUTPUT);
-      digitalWrite(kPins[i].arduinoPin, LOW);
+      if (strcmp(kPins[i].name, "PIN_PC14") == 0) {
+        pinMode(kPins[i].arduinoPin, OUTPUT_OPEN_DRAIN);
+        digitalWrite(kPins[i].arduinoPin, LOW);
+      } else {
+        pinMode(kPins[i].arduinoPin, OUTPUT);
+        digitalWrite(kPins[i].arduinoPin, LOW);
+      }
     } else if (strcmp(kPins[i].name, "PIN_PA0") == 0) {
       pinMode(kPins[i].arduinoPin, INPUT);
     } else {
       pinMode(kPins[i].arduinoPin, INPUT_PULLUP);
     }
   }
-
   // FW-1: UART3 on PC10 (TX) / PC11 (RX), remapped from default PB10/PB11.
   Serial3.setTx(PC_UART_TX);
   Serial3.setRx(PC_UART_RX);
