@@ -269,6 +269,23 @@ static const char *powerStateName() {
     default: return "POWER_OFF";
   }
 }
+
+// LED0 heartbeat: 500 ms period (250 ms ON / 250 ms OFF), starts ON.
+// Free-runs off millis(); SET PIN_PD0 still works but is overwritten
+// on the next half-period edge.
+static constexpr uint32_t kLedHalfMs = 250;
+static uint32_t ledDue = 0;
+static bool ledOn = true;
+
+static void ledTask() {
+  uint32_t now = millis();
+  if ((int32_t)(now - ledDue) < 0) return;
+  ledDue = now + kLedHalfMs;
+  ledOn = !ledOn;
+  const PinEntry *p = findPin("PIN_PD0");
+  if (p != nullptr) digitalWrite(p->arduinoPin, ledOn ? HIGH : LOW);
+}
+
 static void powerTask() {
   const PinEntry *key = findPin("PIN_PA0");  // KEY, active-HIGH
   bool pressed = (key != nullptr) && (digitalRead(key->arduinoPin) == HIGH);
@@ -446,14 +463,18 @@ void setup() {
   // Without this PD0 stays a dead oscillator pin (the LED0 fault).
   __HAL_RCC_AFIO_CLK_ENABLE();
   __HAL_AFIO_REMAP_PD01_ENABLE();
+  // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up — except KEY (PA0,
   // active-HIGH) which has an external 100k pull-down, so plain INPUT,
   // and POWER2 (PC14, open-drain active-LOW) which resets sinking (ON).
-  // POWER1 resets released (OFF).
+  // POWER1 resets released (OFF). LED0 (PD0) resets ON: heartbeat starts lit.
   for (size_t i = 0; i < kNumPins; i++) {
     if (kPins[i].isOutput) {
       if (strcmp(kPins[i].name, "PIN_PC14") == 0) {
         pinMode(kPins[i].arduinoPin, OUTPUT_OPEN_DRAIN);
         digitalWrite(kPins[i].arduinoPin, LOW);  // sink = logical ON
+      } else if (strcmp(kPins[i].name, "PIN_PD0") == 0) {
+        pinMode(kPins[i].arduinoPin, OUTPUT);
+        digitalWrite(kPins[i].arduinoPin, HIGH);  // heartbeat starts ON
       } else {
         pinMode(kPins[i].arduinoPin, OUTPUT);
         digitalWrite(kPins[i].arduinoPin, LOW);
@@ -507,4 +528,5 @@ void loop() {
     }
   }
   powerTask();  // KEY-hold power sequencer (v1.3.0), non-blocking
+  ledTask();    // LED0 heartbeat: 500 ms period, starts ON
 }
