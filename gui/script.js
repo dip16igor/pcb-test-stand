@@ -172,7 +172,7 @@ function connect() {
   ws = new WebSocket(url);
 
   ws.onopen = () => {
-    setConnected(true);
+    // WS is up, but board state is unknown until the daemon's STATE arrives.
     markAllUnknown();
     // Daemon pushes STATUS on its poll loop too; ask explicitly for sync.
     ws.send(JSON.stringify({type: 'CMD', payload: 'STATUS\n'}));
@@ -188,6 +188,7 @@ function connect() {
     if (msg.type === 'STATUS') {
       parseStatus(msg.payload || '');
     } else if (msg.type === 'STATE') {
+      setConnected(msg.payload === 'CONNECTED');
       if (msg.payload === 'CONNECTED') {
         document.getElementById('fwver').textContent = '';
         ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
@@ -196,6 +197,10 @@ function connect() {
         ws.send(JSON.stringify({type: 'CMD', payload: 'INTERLOCK\n'}));
       }
     } else if (msg.type === 'RESP') {
+      if ((msg.payload || '').trim() === 'ERR UART_DISCONNECTED') {
+        setConnected(false);
+        return;
+      }
       handleFwResp(msg.payload || '');
     } else if (msg.type === 'ADC') {
       if (!msg.payload) return;
