@@ -143,6 +143,7 @@ class UartThread(threading.Thread):
             pass
 
     def run(self) -> None:
+        buf = bytearray()
         while not self._stop.is_set():
             ser = self._connect()
             if ser is None:
@@ -157,12 +158,16 @@ class UartThread(threading.Thread):
                 pass
             self._drain(self.tx)
             self._drain(self.rx)
+            buf.clear()
             self.connected.set()
             log.info("UART connected: %s", self.port_name)
             try:
                 # ANY serial failure (read or write, e.g. surprise USB
                 # removal on Windows) lands here and triggers a rescan.
                 # Only queue.Empty (no more to send) continues the loop.
+                # readline() can return mid-line fragments when the poll loop
+                # outruns a long STATUS frame (~470 chars): accumulate bytes
+                # until \n so the bridge only ever sees whole lines.
                 while not self._stop.is_set():
                     if self.drop_requested.is_set():
                         self.drop_requested.clear()
@@ -179,9 +184,12 @@ class UartThread(threading.Thread):
                     ser.flush()
                     raw = ser.readline()
                     if raw:
-                        text = raw.decode("utf-8", "replace")
-                        log.debug("RX: %s", text.strip())
-                        self.rx.put(text)
+                        buf.extend(raw)
+                        if buf.endswith(b"\n"):
+                            text = bytes(buf).decode("utf-8", "replace")
+                            buf.clear()
+                            log.debug("RX: %s", text.strip())
+                            self.rx.put(text)
             except Exception as exc:
                 log.warning("UART I/O failed on %s: %s", self.port_name, exc)
             finally:
