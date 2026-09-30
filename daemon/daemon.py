@@ -223,7 +223,12 @@ class Hub:
         self.last_pwm: str = ""
         self.refresh = asyncio.Event()  # immediate STATUS re-read (after SET)
         self._was_connected = False
-
+        # Link-quality telemetry (LINK message, 1 Hz): counters since boot.
+        self.ok_frames = 0    # STATUS/ADC/PWM frames decoded
+        self.bad_lines = 0    # whole lines matching no known prefix
+        self.drops = 0        # CONNECTED -> DISCONNECTED transitions
+        self.rx_total = 0     # all lines received
+        self.last_link: dict = {}
     async def broadcast(self, msg: dict) -> None:
         dead = []
         for ws in self.clients:
@@ -238,33 +243,59 @@ class Hub:
         s = line.strip()
         if not s:
             return None
+        self.rx_total += 1
         if s.startswith("STATUS"):
             self.last_status = s[len("STATUS"):].strip()
+            self.ok_frames += 1
             log.debug("STATUS: %d pins", len(self.last_status.split()))
             return {"type": "STATUS", "payload": self.last_status}
         if s == "ADC" or s.startswith("ADC "):
             self.last_adc = s[len("ADC"):].strip()
+            self.ok_frames += 1
             log.debug("ADC: %s", self.last_adc)
             return {"type": "ADC", "payload": self.last_adc}
         if s == "PWM" or s.startswith("PWM "):
             self.last_pwm = s[len("PWM"):].strip()
+            self.ok_frames += 1
             log.debug("PWM: %s", self.last_pwm)
             return {"type": "PWM", "payload": self.last_pwm}
         if s.startswith("ERR"):
+            self.ok_frames += 1
             log.warning("FW: %s", s)
-        else:
+        elif (s.startswith("OK") or s == "PONG" or s.startswith("FW ")
+                or s.startswith("STATE ") or s.startswith("INTERLOCK ")
+                or s.startswith("PIN_")):
+            self.ok_frames += 1
             log.info("FW: %s", s)
+        else:
+            self.bad_lines += 1
+            log.warning("FW bad line: %r", s)
         return {"type": "RESP", "payload": s + "\n"}
+
+    def link_info(self) -> dict:
+        """Snapshot for the GUI link indicator (LINK message)."""
+        return {
+            "port": self.uart.port_name,
+            "baud": self.uart.baudrate,
+            "uart": "CONNECTED" if self.uart.connected.is_set() else "DISCONNECTED",
+            "ok": self.ok_frames,
+            "bad": self.bad_lines,
+            "rx": self.rx_total,
+            "drops": self.drops,
+        }
 
     async def loop(self) -> None:
         next_poll = 0.0
         next_adc = 0.0
+        next_link = 0.0
         while True:
             connected = self.uart.connected.is_set()
             now = asyncio.get_event_loop().time()
             if connected != self._was_connected:
                 self._was_connected = connected
                 self.last_rx = now if connected else 0.0
+                if not connected:
+                    self.drops += 1
                 await self.broadcast({
                     "type": "STATE",
                     "payload": "CONNECTED" if connected else "DISCONNECTED",
@@ -289,12 +320,15 @@ class Hub:
                 if self.refresh.is_set() or now >= next_poll:
                     self.refresh.clear()
                     next_poll = now + self.poll_interval
-                    self.uart.tx.put("STATUS\n")
-                    self.uart.tx.put("PWM\n")
                 if now >= next_adc:
                     next_adc = now + self.adc_interval
                     self.uart.tx.put("ADC\n")
-            await asyncio.sleep(0.01)
+                if now >= next_link:
+                    next_link = now + 1.0
+                    info = self.link_info()
+                    if info != self.last_link:
+                        self.last_link = info
+                        await self.broadcast({"type": "LINK", "payload": info})
 
 
 PIN_RE = re.compile(r'data-pin="(PIN_[A-Z0-9_]+)"')
@@ -387,6 +421,7 @@ def build_app(hub: Hub, gui_dir: Path | None) -> FastAPI:
                 await ws.send_json({"type": "ADC", "payload": hub.last_adc})
             if hub.last_pwm:
                 await ws.send_json({"type": "PWM", "payload": hub.last_pwm})
+            await ws.send_json({"type": "LINK", "payload": hub.link_info()})
             while True:
                 msg = await ws.receive_json()
                 if msg.get("type") != "CMD":

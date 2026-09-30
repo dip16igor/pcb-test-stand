@@ -18,6 +18,24 @@ function setConnected(on) {
   }
 }
 
+// LINK telemetry (daemon extension): {port, baud, uart, ok, bad, rx, drops}.
+// Green = clean, amber = bad lines seen, red = UART down. Port/baud always
+// visible so "which adapter am I on" needs no terminal.
+function renderLink(info) {
+  const badge = document.getElementById('link');
+  const port = document.getElementById('portinfo');
+  if (!badge || !port || typeof info !== 'object') return;
+  const name = info.port || '—';
+  port.textContent = `${name} @ ${info.baud || '—'}`;
+  const bad = info.bad || 0;
+  const drops = info.drops || 0;
+  const ok = info.ok || 0;
+  badge.textContent = `LINK ok:${ok} bad:${bad} drop:${drops}`;
+  badge.title = `rx lines: ${info.rx || 0}, uart: ${info.uart || '?'}`;
+  badge.className = info.uart !== 'CONNECTED' ? 'bad'
+    : bad > 0 ? 'warn' : 'ok';
+}
+
 // "VSYS:12.34 24V_IN1:24.10 ..." -> overlay readouts. Elements are static
 // (draggable in ?edit); channels that never arrive stay hidden.
 function renderAdc(payload) {
@@ -208,6 +226,8 @@ function connect() {
       adcCharts(msg.payload, Date.now());
     } else if (msg.type === 'PWM') {
       parsePwm(msg.payload || '');
+    } else if (msg.type === 'LINK') {
+      renderLink(msg.payload || {});
     }
     // Other RESP (OK/ERR echoes) intentionally ignored: next STATUS syncs UI.
   };
