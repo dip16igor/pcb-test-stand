@@ -275,6 +275,8 @@ class Hub:
                         and now - self.last_rx > self.link_timeout):
                     log.warning("link silent %.1fs, dropping %s",
                                 now - self.last_rx, self.uart.port_name)
+                    self.last_rx = 0.0
+                    self.uart.drop_requested.set()
                 now = asyncio.get_event_loop().time()
                 if self.refresh.is_set() or now >= next_poll:
                     self.refresh.clear()
