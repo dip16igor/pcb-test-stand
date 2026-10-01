@@ -208,8 +208,13 @@ function connect() {
     if (msg.type === 'STATUS') {
       parseStatus(msg.payload || '');
     } else if (msg.type === 'STATE') {
-      setConnected(msg.payload === 'CONNECTED');
-      if (msg.payload === 'CONNECTED') {
+      const up = msg.payload === 'CONNECTED';
+      setConnected(up);
+      // LINK telemetry (1 Hz) is the steady-state source of truth, but it
+      // lags transitions: clear the port text now so a disconnect never
+      // shows a stale "COM3 @ ..." until the next LINK arrives.
+      if (!up) document.getElementById('portinfo').textContent = '';
+      if (up) {
         document.getElementById('fwver').textContent = '';
         ws.send(JSON.stringify({type: 'CMD', payload: 'VERSION\n'}));
         ws.send(JSON.stringify({type: 'CMD', payload: 'PWM\n'}));
@@ -219,6 +224,7 @@ function connect() {
     } else if (msg.type === 'RESP') {
       if ((msg.payload || '').trim() === 'ERR UART_DISCONNECTED') {
         setConnected(false);
+        document.getElementById('portinfo').textContent = '';
         return;
       }
       handleFwResp(msg.payload || '');
