@@ -529,7 +529,7 @@ def main(argv=None) -> None:
     async def lifespan_wrapper():
         bridge = asyncio.ensure_future(hub.loop())
         config = uvicorn.Config(app, host="127.0.0.1", port=args.http_port,
-                                log_level="warning")
+                                log_level="info")
         server = uvicorn.Server(config)
         try:
             await server.serve()
