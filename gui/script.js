@@ -26,14 +26,16 @@ function renderLink(info) {
   const port = document.getElementById('portinfo');
   if (!badge || !port || typeof info !== 'object') return;
   const up = info.uart === 'CONNECTED';
+  // Single source of truth: LINK carries the UART state, so the Connected
+  // badge, port readout, and link counters can never disagree.
+  setConnected(up);
   port.textContent = up ? `${info.port || '—'} @ ${info.baud || '—'}` : '';
   const bad = info.bad || 0;
   const drops = info.drops || 0;
   const ok = info.ok || 0;
   badge.textContent = `LINK ok:${ok} bad:${bad} drop:${drops}`;
   badge.title = `rx lines: ${info.rx || 0}, uart: ${info.uart || '?'}`;
-  badge.className = info.uart !== 'CONNECTED' ? 'bad'
-    : bad > 0 ? 'warn' : 'ok';
+  badge.className = !up ? 'bad' : bad > 0 ? 'warn' : 'ok';
 }
 
 // "VSYS:12.34 24V_IN1:24.10 ..." -> overlay readouts. Elements are static
