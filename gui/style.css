@@ -13,6 +13,8 @@ h1 { font-size: 20px; }
   border-radius: 10px;
   color: #fff;
 }
+#status.connected { background-color: green; }
+#status.unknown, #status.disconnected { background-color: red; }
 
 /* Link-quality badge: green = clean, amber = bad lines seen, red = UART down. */
 #link {
