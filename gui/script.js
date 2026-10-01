@@ -25,8 +25,8 @@ function renderLink(info) {
   const badge = document.getElementById('link');
   const port = document.getElementById('portinfo');
   if (!badge || !port || typeof info !== 'object') return;
-  const name = info.port || '—';
-  port.textContent = `${name} @ ${info.baud || '—'}`;
+  const up = info.uart === 'CONNECTED';
+  port.textContent = up ? `${info.port || '—'} @ ${info.baud || '—'}` : '';
   const bad = info.bad || 0;
   const drops = info.drops || 0;
   const ok = info.ok || 0;
