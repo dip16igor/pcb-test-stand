@@ -51,7 +51,8 @@ log = logging.getLogger("daemon")
 def probe_port(device: str, baudrate: int = BAUDRATE, timeout: float = 0.5) -> bool:
     """Open `device`, send PING, return True iff PONG arrives in time (§4.2)."""
     try:
-        ser = serial.serial_for_url(device, baudrate, timeout=timeout)
+        ser = serial.serial_for_url(device, baudrate, timeout=timeout,
+                                     write_timeout=timeout)
     except Exception as exc:
         log.debug("probe %s: open failed: %s", device, exc)
         return False
@@ -114,7 +115,8 @@ class UartThread(threading.Thread):
         if self.manual_port:
             try:
                 ser = serial.serial_for_url(
-                    self.manual_port, self.baudrate, timeout=0.05
+                    self.manual_port, self.baudrate, timeout=0.05,
+                    write_timeout=1.0,
                 )
             except Exception as exc:
                 log.warning("port %s: open failed: %s", self.manual_port, exc)
@@ -129,7 +131,8 @@ class UartThread(threading.Thread):
         if device is None:
             return None
         try:
-            return serial.serial_for_url(device, self.baudrate, timeout=0.05)
+            return serial.serial_for_url(device, self.baudrate, timeout=0.05,
+                                         write_timeout=1.0)
         except Exception as exc:
             log.warning("port %s: open failed: %s", device, exc)
             return None
@@ -324,7 +327,8 @@ class Hub:
                     self.uart.tx.put("PWM\n")
                 if now >= next_adc:
                     next_adc = now + self.adc_interval
-                    self.uart.tx.put("ADC\n")
+                    if not self.uart.drop_requested.is_set():
+                        self.uart.tx.put("ADC\n")
                 if now >= next_link:
                     next_link = now + 1.0
                     info = self.link_info()
