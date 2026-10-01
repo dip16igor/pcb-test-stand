@@ -320,6 +320,8 @@ class Hub:
                 if self.refresh.is_set() or now >= next_poll:
                     self.refresh.clear()
                     next_poll = now + self.poll_interval
+                    self.uart.tx.put("STATUS\n")
+                    self.uart.tx.put("PWM\n")
                 if now >= next_adc:
                     next_adc = now + self.adc_interval
                     self.uart.tx.put("ADC\n")
