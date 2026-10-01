@@ -162,6 +162,10 @@ class UartThread(threading.Thread):
             self._drain(self.tx)
             self._drain(self.rx)
             buf.clear()
+            # Prime the queue so the board answers before the first STATUS
+            # poll; keeps a freshly opened port from idling into a spurious
+            # link-timeout on slow firmware.
+            self.tx.put("PING\n")
             self.connected.set()
             log.info("UART connected: %s", self.port_name)
             try:
@@ -233,14 +237,13 @@ class Hub:
         self.rx_total = 0     # all lines received
         self.last_link: dict = {}
     async def broadcast(self, msg: dict) -> None:
-        dead = []
-        for ws in self.clients:
+        # Never block the bridge: a dead browser socket must not stall
+        # UART polling or HTTP startup. Drop on first failure.
+        for ws in list(self.clients):
             try:
-                await ws.send_json(msg)
+                await asyncio.wait_for(ws.send_json(msg), timeout=1.0)
             except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.clients.discard(ws)
+                self.clients.discard(ws)
 
     def _classify(self, line: str) -> dict | None:
         s = line.strip()
@@ -299,10 +302,10 @@ class Hub:
                 self.last_rx = now if connected else 0.0
                 if not connected:
                     self.drops += 1
-                await self.broadcast({
+                asyncio.ensure_future(self.broadcast({
                     "type": "STATE",
                     "payload": "CONNECTED" if connected else "DISCONNECTED",
-                })
+                }))
             if connected:
                 # Drain everything the firmware (or loopback) sent.
                 try:
@@ -310,7 +313,7 @@ class Hub:
                         msg = self._classify(self.uart.rx.get_nowait())
                         self.last_rx = now
                         if msg is not None:
-                            await self.broadcast(msg)
+                            asyncio.ensure_future(self.broadcast(msg))
                 except queue.Empty:
                     pass
                 if (self.last_rx
@@ -334,7 +337,8 @@ class Hub:
                     info = self.link_info()
                     if info != self.last_link:
                         self.last_link = info
-                        await self.broadcast({"type": "LINK", "payload": info})
+                        asyncio.ensure_future(self.broadcast({"type": "LINK", "payload": info}))
+            await asyncio.sleep(0.01)
 
 
 PIN_RE = re.compile(r'data-pin="(PIN_[A-Z0-9_]+)"')
