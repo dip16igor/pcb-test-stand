@@ -307,11 +307,16 @@ class Hub:
                     "payload": "CONNECTED" if connected else "DISCONNECTED",
                 }))
             if connected:
-                # Drain everything the firmware (or loopback) sent.
+                # Drain everything the firmware sent. Only decodable frames
+                # count as link activity: line noise after power-off (NUL
+                # floods) must not keep the watchdog fed, or the GUI stays
+                # green on a dead board.
                 try:
                     while True:
+                        ok_before = self.ok_frames
                         msg = self._classify(self.uart.rx.get_nowait())
-                        self.last_rx = now
+                        if self.ok_frames > ok_before:
+                            self.last_rx = now
                         if msg is not None:
                             asyncio.ensure_future(self.broadcast(msg))
                 except queue.Empty:
