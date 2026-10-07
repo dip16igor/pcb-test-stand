@@ -466,13 +466,13 @@ void setup() {
   __HAL_AFIO_REMAP_PD01_ENABLE();
   // GPIO per spec §3.3: OUT push-pull LOW, IN pull-up — except KEY (PA0,
   // active-HIGH) which has an external 100k pull-down, so plain INPUT,
-  // and POWER2 (PC14, open-drain active-LOW) which resets sinking (ON).
+  // and POWER2 (PC14, open-drain active-LOW) which resets released (OFF).
   // POWER1 resets released (OFF). LED0 (PD0) resets ON: heartbeat starts lit.
   for (size_t i = 0; i < kNumPins; i++) {
     if (kPins[i].isOutput) {
       if (strcmp(kPins[i].name, "PIN_PC14") == 0) {
         pinMode(kPins[i].arduinoPin, OUTPUT_OPEN_DRAIN);
-        digitalWrite(kPins[i].arduinoPin, LOW);  // sink = logical ON
+        digitalWrite(kPins[i].arduinoPin, HIGH);  // release = logical OFF
       } else if (strcmp(kPins[i].name, "PIN_PD0") == 0) {
         pinMode(kPins[i].arduinoPin, OUTPUT);
         digitalWrite(kPins[i].arduinoPin, HIGH);  // heartbeat starts ON

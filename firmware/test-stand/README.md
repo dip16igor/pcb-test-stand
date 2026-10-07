@@ -24,7 +24,7 @@ Build: `pio run -e genericSTM32F103RE`. Upload: `pio run -e genericSTM32F103RE -
 ## Pin table (spec §3.3, PB3 = OUT per clarification)
 
 Outputs (GUI checkboxes, reset to LOW): PA4 PWR2, PA5 EN_7V, PA6 EN_12V,
-PC13 POWER1, PC14 POWER2 (open-drain active-LOW: ON = sinking LOW, OFF = released; resets ON), PC15 EN_24V2, PD0 LED0 (heartbeat: 500 ms period, starts ON; SET is overwritten each half-period).
+PC13 POWER1, PC14 POWER2 (open-drain active-LOW: ON = sinking LOW, OFF = released; resets OFF), PC15 EN_24V2, PD0 LED0 (heartbeat: 500 ms period, starts ON; SET is overwritten each half-period).
 
 Inputs (GUI LEDs, pull-up; KEY on PA0 is active-HIGH with external 100k
 pull-down, button to VCC): PA0 KEY, PA8 PG1, PA12 STAT2_1, PA15 STAT1_1,
