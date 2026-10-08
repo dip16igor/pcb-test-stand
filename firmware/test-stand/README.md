@@ -23,8 +23,8 @@ Build: `pio run -e genericSTM32F103RE`. Upload: `pio run -e genericSTM32F103RE -
 
 ## Pin table (spec §3.3, PB3 = OUT per clarification)
 
-Outputs (GUI checkboxes, reset to LOW): PA4 PWR2, PA5 EN_7V, PA6 EN_12V,
-PC13 POWER1, PC14 POWER2 (open-drain active-LOW: ON = sinking LOW, OFF = released; resets OFF), PC15 EN_24V2, PD0 LED0 (heartbeat: 500 ms period, starts ON; SET is overwritten each half-period).
+Outputs (GUI checkboxes, reset to LOW): PA4 PWR2 (DAC ramp v1.5.0, see below), PA5 EN_7V, PA6 EN_12V,
+PA7 EN_24V, PA11 CE1, PB3 CE2, PB8 LED1, PB9 LED2, PC4 PWR1, PC5 EN,
 
 Inputs (GUI LEDs, pull-up; KEY on PA0 is active-HIGH with external 100k
 pull-down, button to VCC): PA0 KEY, PA8 PG1, PA12 STAT2_1, PA15 STAT1_1,
@@ -49,10 +49,12 @@ PWM PIN_PC6 50   ->  OK PIN_PC6 50 | ERR INVALID_PIN | ERR INVALID_ARG
 PWM              ->  PWM PIN_PC6:0 PIN_PC7:0
 INTERLOCK OFF     ->  OK INTERLOCK OFF | query INTERLOCK -> INTERLOCK ON
 PING              ->  PONG
-VERSION           ->  FW v1.4.0 2026-09-29
+VERSION           ->  FW v1.5.0 2026-10-08
+PWR2 DAC ramp (v1.5.0): PA4 = DAC_OUT1. `SET PIN_PA4 ON` ramps 0 -> 4095
+(0..VDDA ~3.3 V) over kDacRampMs (2000, hardcoded); `SET PIN_PA4 OFF` drops
+to 0 immediately. Non-blocking (millis steps). STATUS shows PWR2 ON only
+while ramping, OFF at max hold or after OFF.
 PWM outputs (v1.4.0): PC6 (TIM3_CH1) + PC7 (TIM3_CH2), 7812.5 Hz, 12-bit duty
-(ARR 4095, prescaler 2 at 64 MHz). Duty in percent 0..100, 1% step.
-GUI sliders send `PWM <PIN> <0..100>`; bare `PWM` dumps both duties.
 Interlock (v1.2.0, FW-9, default ON): SETting POWER1/POWER2 or PWR1/PWR2 ON
 forces the partner LOW first; OFF needs nothing. GUI header checkbox
 toggles the mode; terminal users get the same protection automatically.

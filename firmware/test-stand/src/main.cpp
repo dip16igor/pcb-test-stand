@@ -2,10 +2,10 @@
 
 // Fallback version/date if not passed via build_flags (see platformio.ini, spec §12.3).
 #ifndef FW_VERSION
-#define FW_VERSION "1.4.0"
+#define FW_VERSION "1.5.0"
 #endif
 #ifndef FW_DATE
-#define FW_DATE "2026-09-29"
+#define FW_DATE "2026-10-08"
 #endif
 
 // UART3 115200 8N1 (spec §2.3, §3.5).
@@ -172,16 +172,46 @@ static bool isPower2(const PinEntry *p) {
   return strcmp(p->name, "PIN_PC14") == 0;
 }
 
+// PWR2 (PA4 = DAC_OUT1) ramp: SET ON starts a 0 -> max ramp over
+// kDacRampMs, SET OFF kills it to 0 immediately. Non-blocking: dacTask()
+// advances one step per loop iteration. analogWrite() handles DAC init
+// (12-bit DACC_RESOLUTION); 0..4095 maps to 0..VDDA (~3.3 V).
+static constexpr uint32_t kDacRampMs = 2000;  // hardcoded ramp time
+static constexpr uint32_t kDacMax = 4095;
+static bool dacRunning = false;
+static uint32_t dacStartMs = 0;
+
 static void outputOff(const PinEntry *p) {
+  if (strcmp(p->name, "PIN_PA4") == 0) {
+    dacRunning = false;
+    analogWrite(PA4, 0);  // immediate 0, no ramp-down
+    return;
+  }
   if (isPower2(p)) digitalWrite(p->arduinoPin, HIGH);  // release
   else digitalWrite(p->arduinoPin, LOW);
 }
 
-// Logical level: POWER2 reads inverted (sinking LOW = ON).
+// Logical level: POWER2 reads inverted (sinking LOW = ON); PWR2 reports
+// the DAC ramp state (a DAC pin has no meaningful digital readback).
 static bool logicalRead(const PinEntry *p) {
+  if (strcmp(p->name, "PIN_PA4") == 0) return dacRunning;
   int v = digitalRead(p->arduinoPin);
   if (isPower2(p)) return v == LOW;
   return v == HIGH;
+}
+
+static void dacTask() {
+  if (!dacRunning) return;
+  uint32_t now = millis();
+  uint32_t elapsed = now - dacStartMs;
+  uint32_t ticks;
+  if (elapsed >= kDacRampMs) {
+    ticks = kDacMax;
+    dacRunning = false;  // ramp complete, hold max
+  } else {
+    ticks = (elapsed * (kDacMax + 1)) / kDacRampMs;
+  }
+  analogWrite(PA4, ticks);
 }
 
 static const PinEntry *findPin(const char *name) {
@@ -247,6 +277,13 @@ static uint32_t pinsOffDue = 0;     // POWERING_OFF -> pins LOW deadline
 // Shared by SET and the sequencer. POWER2 logic lives in the early helpers
 // above (isPower2/outputOff/logicalRead); outputOn inverts the drive here.
 static void outputOn(const PinEntry *p) {
+  if (strcmp(p->name, "PIN_PA4") == 0) {
+    // PWR2 is the DAC ramp: kill any stale level, restart 0 -> max.
+    dacRunning = false;
+    analogWrite(PA4, 0);
+    dacStartMs = millis();
+    dacRunning = true;
+  }
   if (interlockEnabled) {
     for (size_t i = 0; i < kNumInterlock; i++) {
       const char *partner = nullptr;
@@ -259,7 +296,7 @@ static void outputOn(const PinEntry *p) {
     }
   }
   if (isPower2(p)) digitalWrite(p->arduinoPin, LOW);  // sink
-  else digitalWrite(p->arduinoPin, HIGH);
+  else if (strcmp(p->name, "PIN_PA4") != 0) digitalWrite(p->arduinoPin, HIGH);
 }
 
 static const char *powerStateName() {
@@ -476,6 +513,10 @@ void setup() {
       } else if (strcmp(kPins[i].name, "PIN_PD0") == 0) {
         pinMode(kPins[i].arduinoPin, OUTPUT);
         digitalWrite(kPins[i].arduinoPin, HIGH);  // heartbeat starts ON
+      } else if (strcmp(kPins[i].name, "PIN_PA4") == 0) {
+        // PWR2 is DAC-driven at runtime; park as GPIO LOW until first SET ON.
+        pinMode(kPins[i].arduinoPin, OUTPUT);
+        digitalWrite(kPins[i].arduinoPin, LOW);
       } else {
         pinMode(kPins[i].arduinoPin, OUTPUT);
         digitalWrite(kPins[i].arduinoPin, LOW);
@@ -530,4 +571,5 @@ void loop() {
   }
   powerTask();  // KEY-hold power sequencer (v1.3.0), non-blocking
   ledTask();    // LED0 heartbeat: 500 ms period, starts ON
+  dacTask();    // PWR2 DAC ramp: 0 -> max over kDacRampMs
 }

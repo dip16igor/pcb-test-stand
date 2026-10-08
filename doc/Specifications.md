@@ -75,7 +75,7 @@ The system consists of three independent components:
 | GPIO | Type | Configuration | Post-Reset Value | GUI Name |
 |------|------|---------------|------------------|----------|
 | PA0 | IN | Ext. 100k pull-down, plain INPUT | — | KEY (active-HIGH, power sequencer) |
-| PA4 | OUT | Push-pull | 0 (LOW) | PWR2 |
+| PA4 | OUT | DAC_OUT1, ramp 0->max on ON | 0 (LOW) | PWR2 |
 | PA5 | OUT | Push-pull | 0 (LOW) | EN_7V |
 | PA6 | OUT | Push-pull | 0 (LOW) | EN_12V |
 | PA7 | OUT | Push-pull | 0 (LOW) | EN_24V |
