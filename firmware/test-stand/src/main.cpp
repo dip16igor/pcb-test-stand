@@ -173,95 +173,45 @@ static bool isPower2(const PinEntry *p) {
 }
 
 // PWR2 (PA4 = DAC_OUT1) ramp: SET ON starts a 0 -> max ramp over
-// kDacRampMs, SET OFF kills it to 0 immediately. The ramp runs on
-// DAC+DMA+TIM6 in hardware: TIM6 TRGO fires every kDacRampMs/kDacSteps ms,
-// DMA1_CH3 feeds the next sample to DAC DHR12R1, CPU uninvolved.
-// 0..4095 maps to 0..VDDA (~3.3 V). 256 samples, ~0.8 ms step at 200 ms.
+// kDacRampMs, SET OFF kills it to 0 immediately. Non-blocking: dacTask()
+// advances from the loop; analogWrite() owns DAC init + PA4 pinmux, so the
+// ramp provably reaches the pin (DMA variant output 0 V — root cause
+// unconfirmed, likely TIM6/DMA init order or trigger mapping).
 static constexpr uint32_t kDacRampMs = 200;  // hardcoded ramp time
 static constexpr uint32_t kDacMax = 4095;
-static constexpr size_t kDacSteps = 256;
-static bool dacOn = false;  // latched by SET ON/OFF; STATUS follows this
-static uint16_t dacBuf[kDacSteps];
-static DAC_HandleTypeDef dacHandle;
-static TIM_HandleTypeDef tim6Handle;
-static DMA_HandleTypeDef dmaHandle;
-static uint8_t dacInitStage = 0;  // diag: bitmask of passed init stages
+static bool dacRunning = false;  // ramp in progress
+static bool dacOn = false;       // latched by SET ON/OFF; STATUS follows this
+static uint32_t dacStartMs = 0;
 
-static void dacHwInit() {
-  for (size_t i = 0; i < kDacSteps; i++) {
-    dacBuf[i] = (uint16_t)((i * (kDacMax + 1)) / kDacSteps);
+static void outputOff(const PinEntry *p);
+
+static void dacTask() {
+  if (!dacRunning) return;
+  uint32_t now = millis();
+  uint32_t elapsed = now - dacStartMs;
+  uint32_t ticks;
+  if (elapsed >= kDacRampMs) {
+    ticks = kDacMax;
+    dacRunning = false;  // ramp complete, hold max (dacOn stays latched)
+  } else {
+    ticks = (elapsed * (kDacMax + 1)) / kDacRampMs;
   }
-  // PA4 leaves GPIO mode for the DAC peripheral: analog, no pull.
-  // setup() parked it as GPIO LOW; INPUT_ANALOG hands it to DAC_OUT1.
-  pinMode(PA4, INPUT_ANALOG);
-  tim6Handle.Instance = TIM6;
-  tim6Handle.Init.Prescaler = (64000000 / 1000000) - 1;  // 1 us ticks
-  tim6Handle.Init.Period = (kDacRampMs * 1000 / kDacSteps) - 1;
-  tim6Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-  tim6Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&tim6Handle) != HAL_OK) return;
-  dacInitStage |= 0x01;
-  TIM_MasterConfigTypeDef master = {};
-  master.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  master.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&tim6Handle, &master) != HAL_OK) return;
-  dacInitStage |= 0x02;
-
-  dmaHandle.Instance = DMA1_Channel3;
-  dmaHandle.Init.Direction = DMA_MEMORY_TO_PERIPH;
-  dmaHandle.Init.PeriphInc = DMA_PINC_DISABLE;
-  dmaHandle.Init.MemInc = DMA_MINC_ENABLE;
-  dmaHandle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-  dmaHandle.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-  dmaHandle.Init.Mode = DMA_NORMAL;
-  dmaHandle.Init.Priority = DMA_PRIORITY_HIGH;
-  if (HAL_DMA_Init(&dmaHandle) != HAL_OK) return;
-  dacInitStage |= 0x04;
-  __HAL_LINKDMA(&dacHandle, DMA_Handle1, dmaHandle);
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
-
-  dacHandle.Instance = DAC;
-  if (HAL_DAC_Init(&dacHandle) != HAL_OK) return;
-  dacInitStage |= 0x08;
-  DAC_ChannelConfTypeDef ch = {};
-  ch.DAC_Trigger = DAC_TRIGGER_T6_TRGO;
-  ch.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
-  if (HAL_DAC_ConfigChannel(&dacHandle, &ch, DAC_CHANNEL_1) != HAL_OK) return;
-  dacInitStage |= 0x10;
-}
-
-static void dacRampStart() {
-  HAL_DAC_Stop_DMA(&dacHandle, DAC_CHANNEL_1);
-  HAL_TIM_Base_Stop(&tim6Handle);
-  HAL_DAC_SetValue(&dacHandle, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
-  HAL_DAC_Start(&dacHandle, DAC_CHANNEL_1);
-  dacOn = true;
-  if (HAL_DAC_Start_DMA(&dacHandle, DAC_CHANNEL_1,
-                         reinterpret_cast<const uint32_t *>(dacBuf),
-                         kDacSteps, DAC_ALIGN_12B_R) != HAL_OK) {
-    dacOn = false;
-    return;
-  }
-  HAL_TIM_Base_Start(&tim6Handle);
-}
-
-static void dacRampStop() {
-  HAL_DAC_Stop_DMA(&dacHandle, DAC_CHANNEL_1);
-  HAL_TIM_Base_Stop(&tim6Handle);
-  dacOn = false;
-  HAL_DAC_SetValue(&dacHandle, DAC_CHANNEL_1, DAC_ALIGN_12B_R, 0);
-  HAL_DAC_Start(&dacHandle, DAC_CHANNEL_1);
+  analogWrite(PA4, ticks);
 }
 
 static void outputOff(const PinEntry *p) {
   if (strcmp(p->name, "PIN_PA4") == 0) {
-    dacRampStop();  // immediate 0, DMA halted
+    dacRunning = false;
+    dacOn = false;
+    analogWrite(PA4, 0);  // immediate 0, no ramp-down
+    delay(2);             // let the write land before any re-arm
+    analogWrite(PA4, 0);  // second write: first can be lost on a busy DAC
     return;
   }
   if (isPower2(p)) digitalWrite(p->arduinoPin, HIGH);  // release
   else digitalWrite(p->arduinoPin, LOW);
 }
+
 
 // Logical level: POWER2 reads inverted (sinking LOW = ON); PWR2 reports
 // the latched SET state (a DAC pin has no meaningful digital readback).
@@ -335,7 +285,13 @@ static uint32_t pinsOffDue = 0;     // POWERING_OFF -> pins LOW deadline
 // Shared by SET and the sequencer. POWER2 logic lives in the early helpers
 // above (isPower2/outputOff/logicalRead); outputOn inverts the drive here.
 static void outputOn(const PinEntry *p) {
-  if (strcmp(p->name, "PIN_PA4") == 0) dacRampStart();  // 0 -> max in HW
+  if (strcmp(p->name, "PIN_PA4") == 0) {
+    // PWR2 DAC ramp: kill any stale level, restart 0 -> max.
+    analogWrite(PA4, 0);
+    dacStartMs = millis();
+    dacRunning = true;
+    dacOn = true;
+  }
   if (interlockEnabled) {
     for (size_t i = 0; i < kNumInterlock; i++) {
       const char *partner = nullptr;
@@ -448,16 +404,6 @@ static void handleLine(char *line) {
     Serial3.print(F("STATE "));
     Serial3.print(powerStateName());
     Serial3.print(F("\n"));
-  } else if (strcmp(cmd, "DAC") == 0) {
-    // Diag: init-stage bitmask + DMA position + live DOR value.
-    Serial3.print(F("DAC init:0x"));
-    Serial3.print(dacInitStage, HEX);
-    Serial3.print(F(" ndtr:"));
-    Serial3.print((unsigned)DMA1_Channel3->CNDTR);
-    Serial3.print(F(" dor:"));
-    Serial3.print((unsigned)(DAC->DOR1 & 0xFFF));
-    Serial3.print(F(" on:"));
-    Serial3.print(dacOn ? F("1\n") : F("0\n"));
   } else if (strcmp(cmd, "ADC") == 0) {
     sendAdc();
   } else if (strcmp(cmd, "PWM") == 0) {
@@ -559,8 +505,9 @@ void setup() {
   // below assumes 12-bit (ADC_FULL 4095). Without this every rail reads
   // ~1/4 of the true voltage.
   analogReadResolution(12);
-  // NOTE: no analogWriteResolution() — PWM uses setCaptureCompare directly
-  // and the DAC ramp drives HAL registers, not analogWrite().
+  // analogWrite defaults to 8-bit (AVR compat): without this the DAC sees
+  // only values 0..255 mapped onto 0..4095, i.e. 16 stair-steps per ramp.
+  analogWriteResolution(12);
   // PD0/PD1 live on OSC_IN/OSC_OUT: remap them to GPIO (needs HSI, no HSE).
   // Without this PD0 stays a dead oscillator pin (the LED0 fault).
   __HAL_RCC_AFIO_CLK_ENABLE();
@@ -595,7 +542,6 @@ void setup() {
   Serial3.setRx(PC_UART_RX);
   Serial3.begin(UART_BAUD);
   pwmInit();  // TIM3 PC6/PC7, 7812.5 Hz, 0% duty
-  dacHwInit();  // DAC+DMA+TIM6 pre-armed; ramp starts on SET PIN_PA4 ON
   delay(100);  // let the USB-UART adapter enumerate
   Serial3.print(F("FW v"));
   Serial3.print(FW_VERSION);
@@ -635,5 +581,5 @@ void loop() {
   }
   powerTask();  // KEY-hold power sequencer (v1.3.0), non-blocking
   ledTask();    // LED0 heartbeat: 500 ms period, starts ON
-  // PWR2 ramp needs no loop work: DAC+DMA+TIM6 run it in hardware.
+  dacTask();    // PWR2 DAC ramp: 0 -> max over kDacRampMs
 }
