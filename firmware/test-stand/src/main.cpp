@@ -173,39 +173,48 @@ static bool isPower2(const PinEntry *p) {
 }
 
 // PWR2 (PA4 = DAC_OUT1) ramp: SET ON starts a 0 -> max ramp over
-// kDacRampMs, SET OFF kills it to 0 immediately. Non-blocking: dacTask()
-// advances from the loop; analogWrite() owns DAC init + PA4 pinmux, so the
-// ramp provably reaches the pin (DMA variant output 0 V — root cause
-// unconfirmed, likely TIM6/DMA init order or trigger mapping).
+// kDacRampMs, SET OFF kills it to 0 immediately. The ramp steps from a
+// TIM7 update ISR (1 kHz, 200 steps): immune to loop() stalls from
+// STATUS/ADC/PWM polling, unlike the old dacTask() polling. analogWrite()
+// owns DAC init + PA4 pinmux, so the output provably reaches the pin.
 static constexpr uint32_t kDacRampMs = 200;  // hardcoded ramp time
 static constexpr uint32_t kDacMax = 4095;
-static bool dacRunning = false;  // ramp in progress
-static bool dacOn = false;       // latched by SET ON/OFF; STATUS follows this
-static uint32_t dacStartMs = 0;
+static constexpr uint32_t kDacIsrHz = 1000;
+static constexpr uint32_t kDacSteps = kDacRampMs * kDacIsrHz / 1000;
+static volatile uint32_t dacStep = 0;  // ISR position; UINT32_MAX = idle
+static bool dacOn = false;             // latched by SET ON/OFF; STATUS follows this
+static HardwareTimer *dacTimer = nullptr;
+
+static void dacIsr() {
+  if (dacStep >= kDacSteps) return;  // hold max, wait for OFF
+  analogWrite(PA4, (dacStep * (kDacMax + 1)) / kDacSteps);
+  dacStep++;
+  if (dacStep >= kDacSteps) analogWrite(PA4, kDacMax);
+}
+
+static void dacHwInit() {
+  dacTimer = new HardwareTimer(TIM7);
+  dacTimer->setOverflow(kDacIsrHz, HERTZ_FORMAT);
+  dacTimer->attachInterrupt(dacIsr);
+  dacTimer->resume();
+}
+
+static void dacRampStart() {
+  dacStep = 0;
+  dacOn = true;
+}
+
+static void dacRampStop() {
+  dacStep = UINT32_MAX;  // ISR goes idle
+  dacOn = false;
+  analogWrite(PA4, 0);  // immediate 0, no ramp-down
+}
 
 static void outputOff(const PinEntry *p);
 
-static void dacTask() {
-  if (!dacRunning) return;
-  uint32_t now = millis();
-  uint32_t elapsed = now - dacStartMs;
-  uint32_t ticks;
-  if (elapsed >= kDacRampMs) {
-    ticks = kDacMax;
-    dacRunning = false;  // ramp complete, hold max (dacOn stays latched)
-  } else {
-    ticks = (elapsed * (kDacMax + 1)) / kDacRampMs;
-  }
-  analogWrite(PA4, ticks);
-}
-
 static void outputOff(const PinEntry *p) {
   if (strcmp(p->name, "PIN_PA4") == 0) {
-    dacRunning = false;
-    dacOn = false;
-    analogWrite(PA4, 0);  // immediate 0, no ramp-down
-    delay(2);             // let the write land before any re-arm
-    analogWrite(PA4, 0);  // second write: first can be lost on a busy DAC
+    dacRampStop();  // ISR idle, DAC to 0 immediately
     return;
   }
   if (isPower2(p)) digitalWrite(p->arduinoPin, HIGH);  // release
@@ -285,13 +294,7 @@ static uint32_t pinsOffDue = 0;     // POWERING_OFF -> pins LOW deadline
 // Shared by SET and the sequencer. POWER2 logic lives in the early helpers
 // above (isPower2/outputOff/logicalRead); outputOn inverts the drive here.
 static void outputOn(const PinEntry *p) {
-  if (strcmp(p->name, "PIN_PA4") == 0) {
-    // PWR2 DAC ramp: kill any stale level, restart 0 -> max.
-    analogWrite(PA4, 0);
-    dacStartMs = millis();
-    dacRunning = true;
-    dacOn = true;
-  }
+  if (strcmp(p->name, "PIN_PA4") == 0) dacRampStart();  // ISR ramps 0 -> max
   if (interlockEnabled) {
     for (size_t i = 0; i < kNumInterlock; i++) {
       const char *partner = nullptr;
@@ -542,6 +545,7 @@ void setup() {
   Serial3.setRx(PC_UART_RX);
   Serial3.begin(UART_BAUD);
   pwmInit();  // TIM3 PC6/PC7, 7812.5 Hz, 0% duty
+  dacHwInit();  // TIM7 1 kHz ISR armed; ramp runs on SET PIN_PA4 ON
   delay(100);  // let the USB-UART adapter enumerate
   Serial3.print(F("FW v"));
   Serial3.print(FW_VERSION);
@@ -581,5 +585,5 @@ void loop() {
   }
   powerTask();  // KEY-hold power sequencer (v1.3.0), non-blocking
   ledTask();    // LED0 heartbeat: 500 ms period, starts ON
-  dacTask();    // PWR2 DAC ramp: 0 -> max over kDacRampMs
+  // PWR2 ramp needs no loop work: TIM7 ISR steps the DAC.
 }
