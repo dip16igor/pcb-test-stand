@@ -185,6 +185,7 @@ static uint16_t dacBuf[kDacSteps];
 static DAC_HandleTypeDef dacHandle;
 static TIM_HandleTypeDef tim6Handle;
 static DMA_HandleTypeDef dmaHandle;
+static uint8_t dacInitStage = 0;  // diag: bitmask of passed init stages
 
 static void dacHwInit() {
   for (size_t i = 0; i < kDacSteps; i++) {
@@ -199,10 +200,12 @@ static void dacHwInit() {
   tim6Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
   tim6Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&tim6Handle) != HAL_OK) return;
+  dacInitStage |= 0x01;
   TIM_MasterConfigTypeDef master = {};
   master.MasterOutputTrigger = TIM_TRGO_UPDATE;
   master.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&tim6Handle, &master) != HAL_OK) return;
+  dacInitStage |= 0x02;
 
   dmaHandle.Instance = DMA1_Channel3;
   dmaHandle.Init.Direction = DMA_MEMORY_TO_PERIPH;
@@ -213,16 +216,19 @@ static void dacHwInit() {
   dmaHandle.Init.Mode = DMA_NORMAL;
   dmaHandle.Init.Priority = DMA_PRIORITY_HIGH;
   if (HAL_DMA_Init(&dmaHandle) != HAL_OK) return;
+  dacInitStage |= 0x04;
   __HAL_LINKDMA(&dacHandle, DMA_Handle1, dmaHandle);
   HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
   dacHandle.Instance = DAC;
   if (HAL_DAC_Init(&dacHandle) != HAL_OK) return;
+  dacInitStage |= 0x08;
   DAC_ChannelConfTypeDef ch = {};
   ch.DAC_Trigger = DAC_TRIGGER_T6_TRGO;
   ch.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&dacHandle, &ch, DAC_CHANNEL_1) != HAL_OK) return;
+  dacInitStage |= 0x10;
 }
 
 static void dacRampStart() {
@@ -442,6 +448,16 @@ static void handleLine(char *line) {
     Serial3.print(F("STATE "));
     Serial3.print(powerStateName());
     Serial3.print(F("\n"));
+  } else if (strcmp(cmd, "DAC") == 0) {
+    // Diag: init-stage bitmask + DMA position + live DOR value.
+    Serial3.print(F("DAC init:0x"));
+    Serial3.print(dacInitStage, HEX);
+    Serial3.print(F(" ndtr:"));
+    Serial3.print((unsigned)DMA1_Channel3->CNDTR);
+    Serial3.print(F(" dor:"));
+    Serial3.print((unsigned)(DAC->DOR1 & 0xFFF));
+    Serial3.print(F(" on:"));
+    Serial3.print(dacOn ? F("1\n") : F("0\n"));
   } else if (strcmp(cmd, "ADC") == 0) {
     sendAdc();
   } else if (strcmp(cmd, "PWM") == 0) {
