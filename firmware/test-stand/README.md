@@ -51,7 +51,7 @@ INTERLOCK OFF     ->  OK INTERLOCK OFF | query INTERLOCK -> INTERLOCK ON
 PING              ->  PONG
 VERSION           ->  FW v1.5.0 2026-10-08
 PWR2 DAC ramp (v1.5.0): PA4 = DAC_OUT1. `SET PIN_PA4 ON` ramps 0 -> 4095
-(0..VDDA ~3.3 V) over kDacRampMs (2000, hardcoded); `SET PIN_PA4 OFF` drops
+(0..VDDA ~3.3 V) over kDacRampMs (200, hardcoded); `SET PIN_PA4 OFF` drops
 to 0 immediately. Non-blocking (millis steps). STATUS shows PWR2 ON only
 while ramping, OFF at max hold or after OFF.
 PWM outputs (v1.4.0): PC6 (TIM3_CH1) + PC7 (TIM3_CH2), 7812.5 Hz, 12-bit duty

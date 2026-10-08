@@ -176,7 +176,7 @@ static bool isPower2(const PinEntry *p) {
 // kDacRampMs, SET OFF kills it to 0 immediately. Non-blocking: dacTask()
 // advances one step per loop iteration. analogWrite() handles DAC init
 // (12-bit DACC_RESOLUTION); 0..4095 maps to 0..VDDA (~3.3 V).
-static constexpr uint32_t kDacRampMs = 2000;  // hardcoded ramp time
+static constexpr uint32_t kDacRampMs = 200;  // hardcoded ramp time
 static constexpr uint32_t kDacMax = 4095;
 static bool dacRunning = false;
 static uint32_t dacStartMs = 0;
