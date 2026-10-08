@@ -185,6 +185,8 @@ static void outputOff(const PinEntry *p) {
   if (strcmp(p->name, "PIN_PA4") == 0) {
     dacRunning = false;
     analogWrite(PA4, 0);  // immediate 0, no ramp-down
+    delay(2);             // let the write land before any re-arm
+    analogWrite(PA4, 0);  // second write: first can be lost on a busy DAC
     return;
   }
   if (isPower2(p)) digitalWrite(p->arduinoPin, HIGH);  // release
