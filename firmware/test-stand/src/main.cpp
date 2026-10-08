@@ -190,10 +190,9 @@ static void dacHwInit() {
   for (size_t i = 0; i < kDacSteps; i++) {
     dacBuf[i] = (uint16_t)((i * (kDacMax + 1)) / kDacSteps);
   }
-  __HAL_RCC_DAC_CLK_ENABLE();
-  __HAL_RCC_TIM6_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
+  // PA4 leaves GPIO mode for the DAC peripheral: analog, no pull.
+  // setup() parked it as GPIO LOW; INPUT_ANALOG hands it to DAC_OUT1.
+  pinMode(PA4, INPUT_ANALOG);
   tim6Handle.Instance = TIM6;
   tim6Handle.Init.Prescaler = (64000000 / 1000000) - 1;  // 1 us ticks
   tim6Handle.Init.Period = (kDacRampMs * 1000 / kDacSteps) - 1;
@@ -233,7 +232,7 @@ static void dacRampStart() {
   HAL_DAC_Start(&dacHandle, DAC_CHANNEL_1);
   dacOn = true;
   if (HAL_DAC_Start_DMA(&dacHandle, DAC_CHANNEL_1,
-                         reinterpret_cast<uint32_t *>(dacBuf),
+                         reinterpret_cast<const uint32_t *>(dacBuf),
                          kDacSteps, DAC_ALIGN_12B_R) != HAL_OK) {
     dacOn = false;
     return;
