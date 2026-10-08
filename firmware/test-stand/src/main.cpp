@@ -497,6 +497,9 @@ void setup() {
   // below assumes 12-bit (ADC_FULL 4095). Without this every rail reads
   // ~1/4 of the true voltage.
   analogReadResolution(12);
+  // analogWrite defaults to 8-bit (AVR compat): without this the DAC sees
+  // only values 0..255 mapped onto 0..4095, i.e. 16 stair-steps per ramp.
+  analogWriteResolution(12);
   // PD0/PD1 live on OSC_IN/OSC_OUT: remap them to GPIO (needs HSI, no HSE).
   // Without this PD0 stays a dead oscillator pin (the LED0 fault).
   __HAL_RCC_AFIO_CLK_ENABLE();
