@@ -178,12 +178,14 @@ static bool isPower2(const PinEntry *p) {
 // (12-bit DACC_RESOLUTION); 0..4095 maps to 0..VDDA (~3.3 V).
 static constexpr uint32_t kDacRampMs = 200;  // hardcoded ramp time
 static constexpr uint32_t kDacMax = 4095;
-static bool dacRunning = false;
+static bool dacRunning = false;  // ramp in progress
+static bool dacOn = false;       // latched by SET ON/OFF; STATUS follows this
 static uint32_t dacStartMs = 0;
 
 static void outputOff(const PinEntry *p) {
   if (strcmp(p->name, "PIN_PA4") == 0) {
     dacRunning = false;
+    dacOn = false;
     analogWrite(PA4, 0);  // immediate 0, no ramp-down
     delay(2);             // let the write land before any re-arm
     analogWrite(PA4, 0);  // second write: first can be lost on a busy DAC
@@ -194,9 +196,10 @@ static void outputOff(const PinEntry *p) {
 }
 
 // Logical level: POWER2 reads inverted (sinking LOW = ON); PWR2 reports
-// the DAC ramp state (a DAC pin has no meaningful digital readback).
+// the latched SET state (a DAC pin has no meaningful digital readback,
+// and the ramp flag clears at max hold).
 static bool logicalRead(const PinEntry *p) {
-  if (strcmp(p->name, "PIN_PA4") == 0) return dacRunning;
+  if (strcmp(p->name, "PIN_PA4") == 0) return dacOn;
   int v = digitalRead(p->arduinoPin);
   if (isPower2(p)) return v == LOW;
   return v == HIGH;
@@ -209,7 +212,7 @@ static void dacTask() {
   uint32_t ticks;
   if (elapsed >= kDacRampMs) {
     ticks = kDacMax;
-    dacRunning = false;  // ramp complete, hold max
+    dacRunning = false;  // ramp complete, hold max (dacOn stays latched)
   } else {
     ticks = (elapsed * (kDacMax + 1)) / kDacRampMs;
   }
@@ -285,6 +288,7 @@ static void outputOn(const PinEntry *p) {
     analogWrite(PA4, 0);
     dacStartMs = millis();
     dacRunning = true;
+    dacOn = true;
   }
   if (interlockEnabled) {
     for (size_t i = 0; i < kNumInterlock; i++) {
