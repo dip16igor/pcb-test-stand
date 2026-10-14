@@ -93,9 +93,10 @@ function parseStatus(payload) {
       const led = document.querySelector(`.indicator[data-pin="${pinName}"][data-dir="IN"]`);
       if (led) {
         led.classList.remove('on', 'off', 'unknown');
-        if (state === 'ON') led.classList.add('on');
-        else if (state === 'OFF') led.classList.add('off');
-        else led.classList.add('unknown');
+        // Active-low power-good: 0 = good (green), 1 = fault (red).
+        const neg = led.hasAttribute('data-inv');
+        const on = (state === 'ON');
+        led.classList.add(state !== 'ON' && state !== 'OFF' ? 'unknown' : (on !== neg ? 'on' : 'off'));
       }
     }
   });
