@@ -30,3 +30,8 @@ in `doc/Specifications.md` (§3.5, §4.3, §8).
 SemVer + git tags (`v1.0.0` = first firmware cut; later commits add the
 64 MHz clock correction, BluePill test env, daemon, GUI).
 `VERSION` over UART reports the firmware's own version.
+
+## Start daemon
+
+cd c:\NextCloud\pcb-test-stand\daemon
+python daemon.py --auto-port --adc-interval 0.1 --poll-interval 0.1 --http-port 8081
