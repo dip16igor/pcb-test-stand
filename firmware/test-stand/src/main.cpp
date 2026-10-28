@@ -317,8 +317,12 @@ static void enterLowPower(const char *mode)
   }
   else // SLEEP
   {
+    // SysTick fires every 1 ms and would wake WFI instantly: suspend it,
+    // sleep until the WKUP pin (or any other IRQ) fires, then resume.
+    HAL_SuspendTick();
     HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1);
     HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    HAL_ResumeTick();
   }
   // Woke from SLEEP/STOP: clocks are HSI again, resume normal operation.
   HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
