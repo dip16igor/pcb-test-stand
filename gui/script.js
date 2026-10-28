@@ -295,6 +295,20 @@ document.querySelectorAll('input[data-dir="OUT"]').forEach(box => {
   });
 });
 
+// Low-power checkboxes (v1.6.0) -> SLEEP command. Only one mode at a time:
+// checking one unchecks the others; unchecking the active one just clears
+// the UI (wake is the WAKE UP hardware pin, not a command).
+document.querySelectorAll('input[data-sleep]').forEach(box => {
+  box.addEventListener('change', () => {
+    document.querySelectorAll('input[data-sleep]').forEach(other => {
+      if (other !== box) other.checked = false;
+    });
+    if (!box.checked) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) { box.checked = false; return; }
+    ws.send(JSON.stringify({type: 'CMD', payload: `SLEEP ${box.dataset.sleep}\n`}));
+  });
+});
+
 // Interlock mode toggle -> INTERLOCK command (v1.2.0).
 document.getElementById('interlock').addEventListener('change', (ev) => {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;

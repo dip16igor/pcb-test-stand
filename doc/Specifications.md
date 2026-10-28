@@ -141,8 +141,8 @@ The system consists of three independent components:
 | `STATE` (v1.3.0) | Query power sequencer state | `STATE` | `STATE POWER_OFF`, `POWERING_ON`, `POWER_ON`, or `POWERING_OFF` (pins drop 2 s after off announcement) |
 | `PWM <PIN> <0..100>` (v1.4.0) | Set PWM duty in percent, 1% step | `PWM PIN_PC6 50` | `OK PIN_PC6 50`, bare `PWM` → `PWM PIN_PC6:0 PIN_PC7:0`, bad pin → `ERR INVALID_PIN`, bad value → `ERR INVALID_ARG` |
 | `INTERLOCK [ON\|OFF]` (v1.2.0) | Query/set output interlock mode | `INTERLOCK OFF` | `OK INTERLOCK OFF`, query `INTERLOCK` → `INTERLOCK ON`, bad arg → `ERR INVALID_ARG` |
+| `SLEEP SLEEP\|STOP\|STANDBY` (v1.6.0) | Enter MCU low-power mode, wake on WKUP=PA0 rising | `SLEEP STOP` | `OK SLEEP STOP`, bad arg → `ERR INVALID_ARG` |
 | `PING` | Connection check | `PING` | `PONG` |
-
 **Protocol Requirements:**
 - Command case: **uppercase** (case-sensitive).
 - Pin names: format `PIN_<PORT><NUMBER>` (e.g., `PIN_PA4`, `PIN_PA8`).

@@ -49,7 +49,8 @@ PWM PIN_PC6 50   ->  OK PIN_PC6 50 | ERR INVALID_PIN | ERR INVALID_ARG
 PWM              ->  PWM PIN_PC6:0 PIN_PC7:0
 INTERLOCK OFF     ->  OK INTERLOCK OFF | query INTERLOCK -> INTERLOCK ON
 PING              ->  PONG
-VERSION           ->  FW v1.5.0 2026-10-08
+VERSION           ->  FW v1.6.0 2026-10-09
+SLEEP STOP        ->  OK SLEEP STOP (MCU enters low-power; wake on WAKE UP pin)
 PWR2 DAC ramp (v1.5.0): PA4 = DAC_OUT1. `SET PIN_PA4 ON` ramps 0 -> 4095
 (0..VDDA ~3.3 V) over kDacRampMs (200, hardcoded); `SET PIN_PA4 OFF` drops
 to 0 immediately. Non-blocking (millis steps). STATUS shows PWR2 ON only
@@ -59,6 +60,12 @@ Interlock (v1.2.0, FW-9, default ON): SETting POWER1/POWER2 or PWR1/PWR2 ON
 forces the partner LOW first; OFF needs nothing. GUI header checkbox
 toggles the mode; terminal users get the same protection automatically.
 
+Low-power (v1.6.0): `SLEEP SLEEP|STOP|STANDBY` enters the mode, reply `OK SLEEP
+<MODE>` is flushed before clocks stop. Wake source is the WKUP pin = PA0
+(= KEY button, active-HIGH), rising edge. STOP keeps SRAM+registers and
+resumes; STANDBY reboots from setup(). GUI checkboxes Deep Sleep / Power
+Down / Stand By (mutually exclusive); unchecking only clears the UI, wake is
+the hardware pin. DAC ramp is killed on entry.
 Power sequencer (v1.3.0): KEY (PA0, active-HIGH, external 100k pull-down)
 hold drives staged power. `POWER_OFF` + 50 ms hold starts the chain with 500 ms
 between rails: POWER1 → EN_24V2 → EN → PWR1 → EN_24V → EN_12V → EN_7V,

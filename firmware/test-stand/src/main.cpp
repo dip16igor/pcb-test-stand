@@ -2,10 +2,10 @@
 
 // Fallback version/date if not passed via build_flags (see platformio.ini, spec §12.3).
 #ifndef FW_VERSION
-#define FW_VERSION "1.5.0"
+#define FW_VERSION "1.6.0"
 #endif
 #ifndef FW_DATE
-#define FW_DATE "2026-10-08"
+#define FW_DATE "2026-10-09"
 #endif
 
 // UART3 115200 8N1 (spec §2.3, §3.5).
@@ -286,6 +286,44 @@ static void sendStatus()
   Serial3.print(F("\n"));
 }
 
+// Low-power modes (v1.6.0): SLEEP / STOP / STANDBY, entered via SLEEP cmd.
+// Wake source is the WKUP pin = PA0, rising edge, which is also the KEY
+// button (active-HIGH, external 100k pull-down). STOP keeps SRAM+regs and
+// wakes into the running firmware; STANDBY kills power domains and reboots
+// from setup() (SBF flag cleared at boot). Sleep entry is WFI.
+static void enterLowPower(const char *mode)
+{
+  Serial3.print(F("OK SLEEP "));
+  Serial3.print(mode);
+  Serial3.print(F("\n"));
+  Serial3.flush(); // reply must leave before clocks stop
+  delay(5);
+  // Drop the DAC ramp: TIM7 ISR + DMA must not run during/after sleep.
+  dacRampStop();
+  if (strcmp(mode, "STANDBY") == 0)
+  {
+    __HAL_RCC_PWR_CLK_ENABLE();
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+    HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1); // PA0 rising edge
+    HAL_PWR_EnterSTANDBYMode();
+    // No return: wake reboots through setup().
+  }
+  else if (strcmp(mode, "STOP") == 0)
+  {
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1);
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+  }
+  else // SLEEP
+  {
+    HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN1);
+    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+  }
+  // Woke from SLEEP/STOP: clocks are HSI again, resume normal operation.
+  HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN1);
+}
+
 // Output interlock (v1.2.0, FW-9): these pairs must never drive HIGH
 // together. Enabled by default; toggled over UART, not persisted.
 static bool interlockEnabled = true;
@@ -558,6 +596,22 @@ static void handleLine(char *line)
     {
       Serial3.print(F("ERR INVALID_ARG\n"));
     }
+  }
+  else if (strcmp(cmd, "SLEEP") == 0)
+  {
+    char *arg = strtok(nullptr, " \t");
+    if (arg == nullptr)
+    {
+      Serial3.print(F("ERR INVALID_ARG\n"));
+      return;
+    }
+    if (strcmp(arg, "SLEEP") != 0 && strcmp(arg, "STOP") != 0 &&
+        strcmp(arg, "STANDBY") != 0)
+    {
+      Serial3.print(F("ERR INVALID_ARG\n"));
+      return;
+    }
+    enterLowPower(arg);
   }
   else if (strcmp(cmd, "GET") == 0)
   {
