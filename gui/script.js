@@ -102,9 +102,9 @@ function parseStatus(payload) {
   });
 }
 
-// VSYS trend chart: 0..6 V vertical, 5 min sliding window, 60% fill.
+// VSYS trend chart: 0..6 V vertical, 10 min sliding window, 60% fill.
 // History accumulates locally from ADC frames (1 Hz); reconnect restarts it.
-const CHART_SPAN_MS = 5 * 60 * 1000;
+const CHART_SPAN_MS = 10 * 60 * 1000;
 const CHART_VMAX = 6;
 const charts = {};
 function chartInit() {
